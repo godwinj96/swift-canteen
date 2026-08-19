@@ -65,3 +65,18 @@ export const paymentInitiateSchema = z.object({
 export const updateUserRoleSchema = z.object({
   role: z.enum(["CUSTOMER", "STAFF", "VENDOR_OWNER", "SITE_ADMIN", "SUPERUSER"]),
 });
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8).max(100),
+});
+
+export const updateProfileSchema = z.object({
+  fullName: z.string().min(2).max(100),
+  phone: z.string().max(20).optional(),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(100),
+});

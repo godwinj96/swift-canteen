@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -41,6 +42,27 @@ export function AdminMenuClient({
     categoryId: initialCategories[0]?.id ?? "",
     imageUrl: "",
   });
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/menu-items/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not upload image");
+      setItemForm((prev) => ({ ...prev, imageUrl: data.imageUrl }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not upload image");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  }
 
   async function handleCreateCategory(e: FormEvent) {
     e.preventDefault();
@@ -105,11 +127,20 @@ export function AdminMenuClient({
               value={itemForm.description}
               onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
             />
-            <Input
-              placeholder="Image URL"
-              value={itemForm.imageUrl}
-              onChange={(e) => setItemForm({ ...itemForm, imageUrl: e.target.value })}
-            />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted">Photo</label>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleImageSelect}
+                disabled={isUploadingImage}
+                className="text-sm text-ink file:mr-3 file:rounded-full file:border-0 file:bg-ink file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-canteen-dark"
+              />
+              {isUploadingImage && <p className="text-xs text-muted">Uploading…</p>}
+              {itemForm.imageUrl && !isUploadingImage && (
+                <p className="truncate text-xs text-muted">Uploaded: {itemForm.imageUrl.split("/").pop()}</p>
+              )}
+            </div>
             <div className="flex gap-2">
               <Input
                 type="number"

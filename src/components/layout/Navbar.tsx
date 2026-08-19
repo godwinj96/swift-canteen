@@ -19,6 +19,11 @@ export async function Navbar() {
           My Orders
         </Link>
       )}
+      {user && (
+        <Link href="/account" className="text-muted hover:text-canteen">
+          Account
+        </Link>
+      )}
       {isAdmin && (
         <Link href="/admin" className="text-muted hover:text-canteen">
           Admin

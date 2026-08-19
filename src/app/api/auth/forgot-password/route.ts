@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { toErrorResponse } from "@/lib/errors";
 import { forgotPasswordSchema } from "@/lib/validation/schemas";
+import { sendEmail } from "@/lib/email/sendlib";
+
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,8 +13,35 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (user) {
-      // TODO: send a real reset email once an email provider is wired up.
-      console.log(`Password reset requested for user ${user.id}`);
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          resetTokenHash: tokenHash,
+          resetTokenExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+        },
+      });
+
+      const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+      const resetUrl = `${appUrl}/reset-password?token=${token}`;
+
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: "Reset your Swift Canteen password",
+          html: `
+            <p>We received a request to reset your Swift Canteen password.</p>
+            <p><a href="${resetUrl}">Click here to set a new password</a>. This link expires in 30 minutes.</p>
+            <p>If you didn't request this, you can safely ignore this email.</p>
+          `,
+        });
+      } catch (emailError) {
+        // Don't let an email-provider outage change this endpoint's response shape/timing —
+        // that would leak whether the address is registered.
+        console.error("Failed to send password reset email", emailError);
+      }
     }
 
     // Always respond with success to avoid leaking whether an email is registered.
