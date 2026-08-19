@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canteen: #ea580c;
+  --color-canteen-dark: #c2410c;
+  --color-canteen-light: #fff7ed;
+  --color-ink: #1c1917;
+  --color-muted: #78716c;
+  --color-line: #e7e5e4;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, serif;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+body {
+  background-color: #ffffff;
+  color: var(--color-ink);
+  overflow-x: hidden;
+}

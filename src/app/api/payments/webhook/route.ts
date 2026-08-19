@@ -1,0 +1,23 @@
+import { NextRequest, NextResponse } from "next/server";
+import { toErrorResponse } from "@/lib/errors";
+import { verifyWebhookSignature, parseWebhookPayload } from "@/lib/payments/bachsClient";
+import { reconcilePaymentStatus } from "@/lib/payments/service";
+
+export async function POST(request: NextRequest) {
+  try {
+    const rawBody = await request.text();
+    const signature = request.headers.get("x-bachs-signature");
+
+    if (!verifyWebhookSignature(rawBody, signature)) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+    }
+
+    const payload = parseWebhookPayload(rawBody);
+    await reconcilePaymentStatus(payload);
+
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
