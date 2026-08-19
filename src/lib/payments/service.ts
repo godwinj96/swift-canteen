@@ -4,13 +4,15 @@ import { ApiError } from "@/lib/errors";
 import { assertOrderTransition } from "@/lib/orders/stateMachine";
 import { hasMinimumRole } from "@/lib/auth/roles";
 import { assertPaymentTransition } from "./stateMachine";
-import { createHostedCheckout, type BachsWebhookPayload } from "./bachsClient";
+import { createHostedCheckout, type BachsCollectionEvent } from "./bachsClient";
 import type { PaymentStatus, Role } from "@prisma/client";
+
+const PAYMENT_CURRENCY = "NGN";
 
 export async function initiatePayment(orderId: string, userId: string, customerEmail: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { payment: true },
+    include: { payment: true, user: true },
   });
 
   if (!order) throw new ApiError(404, "Order not found");
@@ -23,6 +25,21 @@ export async function initiatePayment(orderId: string, userId: string, customerE
 
   if (payment && payment.status !== "FAILED" && payment.status !== "INITIATED") {
     throw new ApiError(409, `Payment already ${payment.status.toLowerCase()} for this order`);
+  }
+
+  // If there's already a live (unexpired) checkout session for this payment, hand
+  // the customer back the SAME session instead of creating a second one. Two live
+  // sessions for one order is exactly how a customer ends up paying twice — if they
+  // complete the old one after we've moved on to a new one, that payment succeeds
+  // at Bachs with no matching providerCheckoutId here to reconcile it against.
+  if (
+    payment &&
+    payment.status === "INITIATED" &&
+    payment.providerCheckoutUrl &&
+    payment.providerCheckoutExpires &&
+    payment.providerCheckoutExpires > new Date()
+  ) {
+    return { checkoutUrl: payment.providerCheckoutUrl, paymentId: payment.id };
   }
 
   const reference = payment?.reference ?? `order_${orderId}_${randomUUID()}`;
@@ -47,31 +64,63 @@ export async function initiatePayment(orderId: string, userId: string, customerE
   }
 
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
-  const { checkoutUrl } = await createHostedCheckout({
+  const { checkoutUrl, checkoutId, expiresAt } = await createHostedCheckout({
     amount: Number(order.totalAmount),
+    currency: PAYMENT_CURRENCY,
     reference: payment.reference,
-    callbackUrl: `${appUrl}/api/payments/webhook`,
+    successUrl: `${appUrl}/orders/${orderId}?payment=success`,
+    cancelUrl: `${appUrl}/checkout?payment=cancelled&orderId=${orderId}`,
     customerEmail,
+    customerName: order.user.fullName,
+    metadata: { orderId },
+  });
+
+  payment = await prisma.payment.update({
+    where: { id: payment.id },
+    data: { providerCheckoutId: checkoutId, providerCheckoutUrl: checkoutUrl, providerCheckoutExpires: expiresAt },
   });
 
   return { checkoutUrl, paymentId: payment.id };
 }
 
-const BACHS_STATUS_TO_PAYMENT_STATUS: Record<BachsWebhookPayload["status"], PaymentStatus> = {
-  PENDING: "PENDING",
-  SUCCESSFUL: "SUCCESSFUL",
-  FAILED: "FAILED",
+const BACHS_EVENT_TO_PAYMENT_STATUS: Record<BachsCollectionEvent["type"], PaymentStatus> = {
+  "collection.succeeded": "SUCCESSFUL",
+  "collection.failed": "FAILED",
+  "collection.underpaid": "FAILED",
 };
 
-export async function reconcilePaymentStatus(payload: BachsWebhookPayload) {
+const AMOUNT_TOLERANCE = 0.01;
+
+export async function reconcilePaymentStatus(event: BachsCollectionEvent) {
   return prisma.$transaction(async (tx) => {
     const payment = await tx.payment.findUnique({
-      where: { reference: payload.reference },
+      where: { providerCheckoutId: event.checkoutId },
       include: { order: true },
     });
-    if (!payment) throw new ApiError(404, "Payment not found for reference");
+    if (!payment) {
+      // Most likely a stale checkout session superseded by a retried payment
+      // (initiatePayment overwrites providerCheckoutId on retry). Nothing to
+      // reconcile against — log for visibility and stop, rather than making
+      // Bachs retry a delivery we can never resolve.
+      console.warn(`Bachs webhook: no payment found for checkoutId ${event.checkoutId}`);
+      return null;
+    }
 
-    const newStatus = BACHS_STATUS_TO_PAYMENT_STATUS[payload.status];
+    let newStatus = BACHS_EVENT_TO_PAYMENT_STATUS[event.type];
+
+    if (newStatus === "SUCCESSFUL") {
+      const expectedAmount = Number(payment.amount);
+      const paidAmount = Number(event.amount);
+      const amountMatches = Math.abs(expectedAmount - paidAmount) < AMOUNT_TOLERANCE;
+      const currencyMatches = event.currency === PAYMENT_CURRENCY;
+      if (!amountMatches || !currencyMatches) {
+        console.error(
+          `Bachs webhook: amount/currency mismatch for checkoutId ${event.checkoutId} — ` +
+            `expected ${expectedAmount} ${PAYMENT_CURRENCY}, got ${event.amount} ${event.currency}. Marking FAILED for manual review.`
+        );
+        newStatus = "FAILED";
+      }
+    }
 
     if (payment.status === newStatus) {
       return payment;
@@ -83,7 +132,7 @@ export async function reconcilePaymentStatus(payload: BachsWebhookPayload) {
       where: { id: payment.id },
       data: {
         status: newStatus,
-        paidAt: newStatus === "SUCCESSFUL" ? new Date(payload.paidAt ?? Date.now()) : payment.paidAt,
+        paidAt: newStatus === "SUCCESSFUL" ? new Date() : payment.paidAt,
       },
     });
 

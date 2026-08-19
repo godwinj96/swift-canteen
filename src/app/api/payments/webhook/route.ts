@@ -6,14 +6,17 @@ import { reconcilePaymentStatus } from "@/lib/payments/service";
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
+    const timestamp = request.headers.get("x-bachs-timestamp");
     const signature = request.headers.get("x-bachs-signature");
 
-    if (!verifyWebhookSignature(rawBody, signature)) {
+    if (!verifyWebhookSignature(rawBody, timestamp, signature)) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
     }
 
-    const payload = parseWebhookPayload(rawBody);
-    await reconcilePaymentStatus(payload);
+    const event = parseWebhookPayload(rawBody);
+    if (event) {
+      await reconcilePaymentStatus(event);
+    }
 
     return NextResponse.json({ received: true });
   } catch (error) {

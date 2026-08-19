@@ -9,15 +9,17 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  fullName     String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(CUSTOMER)
-  phone        String?
-  createdAt    DateTime @default(now())
-  carts        Cart[]
-  orders       Order[]
+  id                  String    @id @default(cuid())
+  fullName            String
+  email               String    @unique
+  passwordHash        String
+  role                Role      @default(CUSTOMER)
+  phone               String?
+  resetTokenHash      String?
+  resetTokenExpiresAt DateTime?
+  createdAt           DateTime  @default(now())
+  carts               Cart[]
+  orders              Order[]
 }
 
 enum Role {
@@ -99,13 +101,16 @@ model OrderItem {
 }
 
 model Payment {
-  id        String        @id @default(cuid())
-  orderId   String        @unique
-  order     Order         @relation(fields: [orderId], references: [id])
-  amount    Decimal
-  reference String        @unique
-  status    PaymentStatus @default(INITIATED)
-  paidAt    DateTime?
+  id                      String        @id @default(cuid())
+  orderId                 String        @unique
+  order                   Order         @relation(fields: [orderId], references: [id])
+  amount                  Decimal
+  reference               String        @unique
+  providerCheckoutId      String?       @unique
+  providerCheckoutUrl     String?
+  providerCheckoutExpires DateTime?
+  status                  PaymentStatus @default(INITIATED)
+  paidAt                  DateTime?
 }
 
 enum PaymentStatus {

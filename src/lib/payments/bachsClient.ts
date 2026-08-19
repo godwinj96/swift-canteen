@@ -2,24 +2,32 @@ import crypto from "node:crypto";
 
 export interface CreateCheckoutParams {
   amount: number;
+  currency: string;
   reference: string;
-  callbackUrl: string;
+  successUrl: string;
+  cancelUrl: string;
   customerEmail: string;
+  customerName: string;
+  metadata?: Record<string, string>;
 }
 
 export interface CreateCheckoutResult {
   checkoutUrl: string;
-  providerRef: string;
+  checkoutId: string;
+  expiresAt: Date;
 }
 
-export interface BachsWebhookPayload {
-  reference: string;
-  status: "PENDING" | "SUCCESSFUL" | "FAILED";
-  paidAt?: string;
+export interface BachsCollectionEvent {
+  type: "collection.succeeded" | "collection.failed" | "collection.underpaid";
+  checkoutId: string;
+  amount: string;
+  currency: string;
 }
+
+const REPLAY_TOLERANCE_SECONDS = 300;
 
 function getConfig() {
-  const apiKey = process.env.BACHS_SECRET_KEY;
+  const apiKey = process.env.BACHS_API_KEY;
   const baseUrl = process.env.BACHS_BASE_URL ?? "https://api.bachs.io";
   const webhookSecret = process.env.BACHS_WEBHOOK_SECRET;
   if (!apiKey || !webhookSecret) {
@@ -33,17 +41,19 @@ export async function createHostedCheckout(
 ): Promise<CreateCheckoutResult> {
   const { apiKey, baseUrl } = getConfig();
 
-  const response = await fetch(`${baseUrl}/v1/checkout`, {
+  const response = await fetch(`${baseUrl}/v1/checkout-sessions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      amount: params.amount,
+      pricing: { currency: params.currency, amount: params.amount.toFixed(2) },
+      customer: { email: params.customerEmail, name: params.customerName },
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
       reference: params.reference,
-      callback_url: params.callbackUrl,
-      customer_email: params.customerEmail,
+      metadata: params.metadata,
     }),
   });
 
@@ -51,23 +61,56 @@ export async function createHostedCheckout(
     throw new Error(`Bachs checkout creation failed: ${response.status}`);
   }
 
-  const data = (await response.json()) as { checkout_url: string; id: string };
-  return { checkoutUrl: data.checkout_url, providerRef: data.id };
+  const data = (await response.json()) as { checkout_id: string; checkout_url: string; expires_at: string };
+  return { checkoutUrl: data.checkout_url, checkoutId: data.checkout_id, expiresAt: new Date(data.expires_at) };
 }
 
-export function verifyWebhookSignature(rawBody: string, signatureHeader: string | null): boolean {
-  if (!signatureHeader) return false;
+export function verifyWebhookSignature(
+  rawBody: string,
+  timestampHeader: string | null,
+  signatureHeader: string | null
+): boolean {
+  if (!timestampHeader || !signatureHeader) return false;
+
+  const timestamp = Number(timestampHeader);
+  if (!Number.isFinite(timestamp)) return false;
+  if (Math.abs(Date.now() / 1000 - timestamp) > REPLAY_TOLERANCE_SECONDS) return false;
+
   const { webhookSecret } = getConfig();
-  const expected = crypto
-    .createHmac("sha256", webhookSecret)
-    .update(rawBody)
-    .digest("hex");
+  const message = `${timestampHeader}.${rawBody}`;
+  const expected = crypto.createHmac("sha256", webhookSecret).update(message).digest("hex");
+
   const expectedBuf = Buffer.from(expected, "hex");
   const providedBuf = Buffer.from(signatureHeader, "hex");
   if (expectedBuf.length !== providedBuf.length) return false;
   return crypto.timingSafeEqual(expectedBuf, providedBuf);
 }
 
-export function parseWebhookPayload(rawBody: string): BachsWebhookPayload {
-  return JSON.parse(rawBody) as BachsWebhookPayload;
+interface RawBachsWebhookEnvelope {
+  id: string;
+  type: string;
+  created_at: string;
+  organization_id: string;
+  data: {
+    charge_id?: string;
+    checkout_id: string;
+    status: string;
+    amount: string;
+    currency: string;
+  };
+}
+
+const HANDLED_EVENT_TYPES = ["collection.succeeded", "collection.failed", "collection.underpaid"] as const;
+
+export function parseWebhookPayload(rawBody: string): BachsCollectionEvent | null {
+  const envelope = JSON.parse(rawBody) as RawBachsWebhookEnvelope;
+  if (!HANDLED_EVENT_TYPES.includes(envelope.type as BachsCollectionEvent["type"])) {
+    return null;
+  }
+  return {
+    type: envelope.type as BachsCollectionEvent["type"],
+    checkoutId: envelope.data.checkout_id,
+    amount: envelope.data.amount,
+    currency: envelope.data.currency,
+  };
 }
