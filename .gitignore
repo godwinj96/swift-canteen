@@ -43,3 +43,4 @@ dev-server.log
 *.docx
 Chapter*.pdf
 sample_pages*.docx
+/docs/thesis/
