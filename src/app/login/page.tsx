@@ -49,7 +49,12 @@ export default function LoginPage() {
               <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-ink">Password</label>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="block text-sm font-medium text-ink">Password</label>
+                <Link href="/forgot-password" className="text-sm font-medium text-canteen hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <Input
                 type="password"
                 required
@@ -72,7 +77,7 @@ export default function LoginPage() {
       </div>
       <div className="relative hidden bg-canteen-light lg:block">
         <Image
-          src="https://loremflickr.com/900/1200/curry"
+          src="/images/auth/login-bg.jpg"
           alt="A warm, steaming meal"
           fill
           className="object-cover"

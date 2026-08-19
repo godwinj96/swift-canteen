@@ -32,3 +32,14 @@ next-env.d.ts
 
 # crash dumps
 bash.exe.stackdump
+
+# local dev logs
+dev-server.log
+
+# local agent tooling (machine-specific, not project config)
+.claude/
+
+# personal academic materials (not part of the application)
+*.docx
+Chapter*.pdf
+sample_pages*.docx

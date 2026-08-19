@@ -6,25 +6,25 @@ const POPULAR_ITEMS = [
     name: "Jollof Rice & Chicken",
     description: "Classic jollof with grilled chicken",
     price: "₦2,500",
-    image: "https://loremflickr.com/500/400/rice",
+    image: "/images/menu/jollof-rice.jpg",
   },
   {
     name: "Meat Pie",
     description: "Flaky pastry with spiced minced meat",
     price: "₦800",
-    image: "https://loremflickr.com/500/400/meatpie,pastry",
+    image: "/images/menu/meat-pie.jpg",
   },
   {
     name: "Chapman",
     description: "Refreshing house cocktail",
     price: "₦1,200",
-    image: "https://loremflickr.com/500/400/cocktail",
+    image: "/images/menu/chapman.jpg",
   },
   {
     name: "Chin Chin",
     description: "Crunchy sweet fried snack",
     price: "₦600",
-    image: "https://loremflickr.com/500/400/fritters",
+    image: "/images/menu/chin-chin.jpg",
   },
 ];
 
@@ -81,7 +81,7 @@ export default function LandingPage() {
 
         <div className="relative mb-10 w-full max-w-[600px] shrink-0 sm:mb-6 lg:mb-0">
           <Image
-            src="https://loremflickr.com/620/680/curry"
+            src="/images/hero/curry.jpg"
             alt="A steaming plate of rice and stew"
             width={600}
             height={620}

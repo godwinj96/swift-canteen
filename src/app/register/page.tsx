@@ -41,7 +41,7 @@ export default function RegisterPage() {
     <div className="grid min-h-[calc(100vh-160px)] grid-cols-1 lg:grid-cols-2">
       <div className="relative hidden bg-canteen-light lg:block">
         <Image
-          src="https://loremflickr.com/900/1200/friedrice"
+          src="/images/auth/register-bg.jpg"
           alt="A shared canteen meal"
           fill
           className="object-cover"
