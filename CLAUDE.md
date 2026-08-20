@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **swift-canteen** (454 symbols, 1114 relationships, 33 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **swift-canteen** (788 symbols, 1948 relationships, 58 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -42,3 +42,33 @@ This project is indexed by GitNexus as **swift-canteen** (454 symbols, 1114 rela
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+# Engineering Rules
+
+**Before working on any feature in this repo, read `docs/rules/README.md`
+and the rule file(s) relevant to the surface you're touching.** These are
+project-specific conventions — ported and adapted from another project's
+rule set to this app's actual stack (Next.js App Router + Prisma, no
+separate backend) — and they take precedence over generic framework
+defaults for this repo. Several of them exist because of real incidents in
+this codebase (an `unstable_cache`/`revalidateTag` invariant crash, an RSC
+function-prop crash, a missing-env-var payment 500), not hypothetical advice.
+
+| Always read | For |
+|---|---|
+| `docs/rules/01-architecture.md` | Layer contract: pages → route handlers → services → cache/Prisma |
+| `docs/rules/04-api-layer.md` | Route handler conventions, env vars |
+| `docs/rules/09-security.md` | Auth, payments, secrets |
+
+| Read when touching… | File |
+|---|---|
+| Data fetching, cart, forms | `docs/rules/03-state-management.md` |
+| Components, RSC boundaries | `docs/rules/05-component-architecture.md` |
+| Caching, prefetching, perceived latency | `docs/rules/06-caching-and-performance.md` |
+| Layout/CSS | `docs/rules/07-responsiveness.md` |
+| Forms or API payload shapes | `docs/rules/08-input-validation.md` |
+| Routes or mutations (error handling) | `docs/rules/10-error-handling.md` |
+| Adding/changing behavior (tests) | `docs/rules/11-testing.md` |
+
+Full index and rationale: [`docs/rules/README.md`](docs/rules/README.md).
+Port history from the source project: [`docs/rules/SOURCE-MATRIX.md`](docs/rules/SOURCE-MATRIX.md).
