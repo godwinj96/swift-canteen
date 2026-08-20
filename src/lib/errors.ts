@@ -1,3 +1,5 @@
+import { ZodError } from "zod";
+
 export class ApiError extends Error {
   readonly status: number;
   readonly details?: unknown;
@@ -13,6 +15,9 @@ export class ApiError extends Error {
 export function toErrorResponse(error: unknown): { status: number; body: { error: string; details?: unknown } } {
   if (error instanceof ApiError) {
     return { status: error.status, body: { error: error.message, details: error.details } };
+  }
+  if (error instanceof ZodError) {
+    return { status: 400, body: { error: "Invalid request", details: error.flatten().fieldErrors } };
   }
   console.error(error);
   return { status: 500, body: { error: "Internal server error" } };

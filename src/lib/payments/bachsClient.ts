@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { ApiError } from "@/lib/errors";
 
 export interface CreateCheckoutParams {
   amount: number;
@@ -58,7 +59,24 @@ export async function createHostedCheckout(
   });
 
   if (!response.ok) {
-    throw new Error(`Bachs checkout creation failed: ${response.status}`);
+    // Bachs error shape: { detail, error_code, doc_url, errors? } — see
+    // https://docs.bachs.io/errors. Surface `detail`/`error_code` instead of
+    // discarding them, so a real Bachs-side rejection (e.g. an unfunded
+    // balance currency, a validation error) doesn't collapse into an opaque
+    // 500 with no way to diagnose it from the server logs or the client.
+    const errorBody = (await response.json().catch(() => null)) as
+      | { detail?: string; error_code?: string }
+      | null;
+    console.error("Bachs checkout creation failed", {
+      status: response.status,
+      errorCode: errorBody?.error_code,
+      detail: errorBody?.detail,
+    });
+    throw new ApiError(
+      502,
+      "We couldn't start your payment right now. Please try again shortly.",
+      { bachsErrorCode: errorBody?.error_code, bachsDetail: errorBody?.detail }
+    );
   }
 
   const data = (await response.json()) as { checkout_id: string; checkout_url: string; expires_at: string };
