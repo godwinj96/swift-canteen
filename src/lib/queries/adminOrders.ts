@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { OrderStatus, PaymentStatus } from "@prisma/client";
 
 export interface AdminOrderRow {
@@ -71,6 +72,9 @@ export function useAdvanceOrderStatus() {
     onSuccess: ({ orderId, status }) => {
       queryClient.setQueryData<AdminOrderRow[]>(adminOrdersQueryKey, (orders) =>
         orders?.map((order) => (order.id === orderId ? { ...order, status } : order))
+      );
+      toast.success(
+        status === "CANCELLED" ? "Order cancelled." : `Order marked ${status.replace(/_/g, " ").toLowerCase()}.`
       );
     },
   });

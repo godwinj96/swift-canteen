@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { Role } from "@prisma/client";
 
 export interface UserRow {
@@ -48,6 +49,7 @@ export function useUpdateUserRole() {
       queryClient.setQueryData<UserRow[]>(usersQueryKey, (users) =>
         users?.map((user) => (user.id === userId ? { ...user, role } : user))
       );
+      toast.success(`Role updated to ${role}.`);
     },
   });
 }

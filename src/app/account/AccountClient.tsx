@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Card } from "@/components/ui/Card";
 
 export function AccountClient({
@@ -98,8 +99,7 @@ export function AccountClient({
           <form onSubmit={handleChangePassword} className="flex flex-col gap-4">
             <div>
               <label className="mb-2 block text-sm font-medium text-ink">Current password</label>
-              <Input
-                type="password"
+              <PasswordInput
                 required
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
@@ -107,8 +107,7 @@ export function AccountClient({
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-ink">New password</label>
-              <Input
-                type="password"
+              <PasswordInput
                 required
                 minLength={8}
                 value={newPassword}

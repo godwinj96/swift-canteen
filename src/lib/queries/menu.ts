@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export interface Category {
   id: string;
@@ -92,6 +93,7 @@ export function useCreateCategory() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: categoriesQueryKey });
+      toast.success("Category added.");
     },
   });
 }
@@ -119,6 +121,7 @@ export function useCreateMenuItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminMenuItemsQueryKey });
+      toast.success("Item added.");
     },
   });
 }
@@ -147,6 +150,7 @@ export function useUpdateMenuItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminMenuItemsQueryKey });
+      toast.success("Item updated.");
     },
   });
 }
@@ -168,6 +172,7 @@ export function useToggleMenuItemAvailability() {
       queryClient.setQueryData<MenuItemData[]>(adminMenuItemsQueryKey, (items) =>
         items?.map((item) => (item.id === id ? { ...item, isAvailable } : item))
       );
+      toast.success(isAvailable ? "Item marked available." : "Item marked unavailable.");
     },
   });
 }
@@ -187,6 +192,7 @@ export function useDeleteMenuItem() {
       queryClient.setQueryData<MenuItemData[]>(adminMenuItemsQueryKey, (items) =>
         items?.filter((item) => item.id !== id)
       );
+      toast.success("Item deleted.");
     },
   });
 }

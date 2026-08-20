@@ -106,7 +106,6 @@ export function AdminMenuClient({
     try {
       if (editingId) {
         await updateMenuItem.mutateAsync({ id: editingId, ...payload });
-        toast.success("Item updated.");
       } else {
         await createMenuItem.mutateAsync(payload);
       }

@@ -12,6 +12,27 @@ no Redux) — don't introduce one without a real, documented reason.
 **Boundary test:** if the user refreshed the page, should this value come from
 the database? Yes → server state. No → client state.
 
+**Two cache layers, not one instead of the other:** `unstable_cache` (rule 06)
+and TanStack Query are not redundant — they cache different things, at
+different points in the request lifecycle, for different reasons:
+
+| | `unstable_cache` | TanStack Query |
+|---|---|---|
+| Runs where | Server (Route Handlers / Server Components) | Browser |
+| Caches | The result of a Prisma/DB read | The result of a `fetch()` to our own API |
+| Answers | "Does the server need to hit Postgres again?" | "Does the browser need to re-request the API, and how does the UI show loading/error/mutation state while it does?" |
+| Invalidated by | `revalidateTag()` from a route handler | `queryClient.invalidateQueries()` / `setQueryData()` from a mutation's `onSuccess` |
+
+A typical admin page uses **both**, in sequence: the Server Component calls a
+cached getter (e.g. `getAdminOrdersData()`) so the *first* HTML response is
+fast without hitting Postgres cold — then the Client Component hydrates with
+that as `initialData` and uses a TanStack Query hook (`useAdminOrders()`) so
+that in-browser mutations (advance status, cancel) can update the UI, show
+`isPending`, and refetch/patch the cache without a full page reload. Removing
+either layer breaks something real: drop `unstable_cache` and every admin tab
+switch goes back to a cold Prisma query; drop TanStack Query and every admin
+mutation has to hand-roll its own loading state and manual refetch.
+
 ---
 
 ## 1. Server State
@@ -46,11 +67,14 @@ lives in route handlers only, never in the service layer.
 | Modal/dialog open state | Component `useState` |
 | Form drafts | Component state / uncontrolled inputs |
 | Theme, UI toggles | Component state or a small client provider under `src/components/providers/` |
-| Client-side prefetch cache (hover-triggered) | TanStack Query, used *only* as a prefetch cache for `PrefetchLink` — not as a general server-state store (rule 06 §3) |
+| Admin data + mutations (orders, menu, users, reports) after the initial server render | TanStack Query — `src/lib/queries/*.ts` hooks, seeded with `initialData` from the Server Component, handle refetch/`isPending`/cache patching for every admin mutation |
+| Order detail polling while a payment is pending | TanStack Query, `refetchInterval` in `useOrderDetail` |
+| Client-side prefetch (hover-triggered) | The same TanStack Query cache, warmed early via `PrefetchLink`/`RolePrefetcher` (rule 06 §3) — prefetching is a *usage* of the query cache, not a separate cache |
 
-Do not mirror server data (orders, menu items, users) into `useState` "just to
-have it locally" — read it fresh from the cache layer on the server, or via
-the prefetch helpers in `src/lib/queries/` on the client.
+Do not mirror server data (orders, menu items, users) into a second `useState`
+copy "just to have it locally" when a TanStack Query hook for that data
+already exists — read/mutate through the hook so cache invalidation, loading
+state, and prefetching all stay coherent.
 
 ---
 

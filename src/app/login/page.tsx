@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 function isSafeRedirect(path: string | null): path is string {
   return Boolean(path) && path!.startsWith("/") && !path!.startsWith("//");
@@ -61,8 +62,7 @@ function LoginForm() {
                   Forgot password?
                 </Link>
               </div>
-              <Input
-                type="password"
+              <PasswordInput
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
