@@ -89,6 +89,7 @@ export function MenuPageClient({ categories, items, userId }: MenuPageClientProp
       return;
     }
     cart.addItem(itemId, 1);
+    toast.success(`${item.name} added to cart.`);
     setCartOpen(true);
   }
 
