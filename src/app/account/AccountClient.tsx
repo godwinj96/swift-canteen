@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Card } from "@/components/ui/Card";
+import { EnableNotificationsPrompt } from "@/components/notifications/EnableNotificationsPrompt";
 
 export function AccountClient({
   initialFullName,
@@ -92,6 +93,11 @@ export function AccountClient({
               {savingProfile ? "Saving..." : "Save changes"}
             </Button>
           </form>
+        </Card>
+
+        <Card>
+          <h2 className="mb-4 font-semibold text-ink">Notifications</h2>
+          <EnableNotificationsPrompt variant="card" />
         </Card>
 
         <Card>

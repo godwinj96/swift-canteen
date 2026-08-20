@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatNaira } from "@/lib/currency";
 import { useOrderDetail, useRetryPayment, type OrderDetail } from "@/lib/queries/orderDetail";
+import { EnableNotificationsPrompt } from "@/components/notifications/EnableNotificationsPrompt";
 
 const STATUS_STEPS = ["PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "COMPLETED"] as const;
 
@@ -69,6 +70,7 @@ export function OrderDetailClient({ initialOrder }: { initialOrder: OrderDetail 
             Your payment went through and the canteen has your order. We&apos;ll update the status below as it&apos;s
             prepared.
           </p>
+          <EnableNotificationsPrompt />
         </Card>
       )}
 
