@@ -127,6 +127,25 @@ describe("reconcilePaymentStatus", () => {
     expect(order?.status).toBe("PENDING");
   });
 
+  it("confirms a succeeded event that reports the customer-paid amount plus Bachs's processing fee", async () => {
+    // Bachs charges 1.5% (capped at NGN 2,000) and, by default, passes it to
+    // the customer — a genuinely successful payment reports amount slightly
+    // above our pre-fee order total, not an exact match.
+    await reconcilePaymentStatus({ type: "collection.succeeded", checkoutId, amount: "10.15", currency: "NGN" });
+    const payment = await prisma.payment.findUnique({ where: { reference } });
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    expect(payment?.status).toBe("SUCCESSFUL");
+    expect(order?.status).toBe("CONFIRMED");
+  });
+
+  it("marks FAILED when a succeeded event reports an amount far above any plausible fee", async () => {
+    await reconcilePaymentStatus({ type: "collection.succeeded", checkoutId, amount: "20.00", currency: "NGN" });
+    const payment = await prisma.payment.findUnique({ where: { reference } });
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    expect(payment?.status).toBe("FAILED");
+    expect(order?.status).toBe("PENDING");
+  });
+
   it("marks FAILED instead of confirming when a succeeded event reports the wrong currency", async () => {
     await reconcilePaymentStatus({ type: "collection.succeeded", checkoutId, amount: "10.00", currency: "USD" });
     const payment = await prisma.payment.findUnique({ where: { reference } });

@@ -90,6 +90,12 @@ const BACHS_EVENT_TO_PAYMENT_STATUS: Record<BachsCollectionEvent["type"], Paymen
 };
 
 const AMOUNT_TOLERANCE = 0.01;
+// Bachs charges a 1.5% processing fee (capped at NGN 2,000) and, by default,
+// passes it to the customer — the amount reported on a successful webhook is
+// what the customer paid, fee included, not our pre-fee order total. A 5%
+// ceiling comfortably covers that fee on any realistic order size while still
+// catching genuinely wrong amounts (currency-unit mistakes, tampering).
+const MAX_FEE_MARGIN_RATIO = 0.05;
 
 // Cache invalidation happens in the webhook route handler after this resolves,
 // not here — revalidateTag needs a live request context and throws when this
@@ -114,12 +120,19 @@ export async function reconcilePaymentStatus(event: BachsCollectionEvent) {
     if (newStatus === "SUCCESSFUL") {
       const expectedAmount = Number(payment.amount);
       const paidAmount = Number(event.amount);
-      const amountMatches = Math.abs(expectedAmount - paidAmount) < AMOUNT_TOLERANCE;
+      // The customer must have paid at least the order total (a shortfall here
+      // would mean Bachs sent collection.succeeded for a genuine underpayment,
+      // which collection.underpaid is supposed to catch instead — treat it as
+      // suspicious either way). Anything above that up to the fee ceiling is
+      // the customer-borne processing fee, not a mismatch.
+      const amountMatches =
+        paidAmount >= expectedAmount - AMOUNT_TOLERANCE &&
+        paidAmount <= expectedAmount * (1 + MAX_FEE_MARGIN_RATIO) + AMOUNT_TOLERANCE;
       const currencyMatches = event.currency === PAYMENT_CURRENCY;
       if (!amountMatches || !currencyMatches) {
         console.error(
           `Bachs webhook: amount/currency mismatch for checkoutId ${event.checkoutId} — ` +
-            `expected ${expectedAmount} ${PAYMENT_CURRENCY}, got ${event.amount} ${event.currency}. Marking FAILED for manual review.`
+            `expected ~${expectedAmount} ${PAYMENT_CURRENCY} (+ fee), got ${event.amount} ${event.currency}. Marking FAILED for manual review.`
         );
         newStatus = "FAILED";
       }

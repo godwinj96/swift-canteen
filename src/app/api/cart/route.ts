@@ -36,8 +36,8 @@ export async function PUT(request: NextRequest) {
   try {
     const user = await requireAuth();
     const body = cartReplaceSchema.parse(await request.json());
-    const cart = await replaceCart(user.sub, body.items);
-    return NextResponse.json({ cart });
+    await replaceCart(user.sub, body.items);
+    return NextResponse.json({ ok: true });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

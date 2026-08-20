@@ -11,14 +11,13 @@ import { useOrderDetail, useRetryPayment, type OrderDetail } from "@/lib/queries
 
 const STATUS_STEPS = ["PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "COMPLETED"] as const;
 
-function PaymentSuccessBanner({ onConfirmed }: { onConfirmed: () => void }) {
+function ReturnFromCheckoutBanner({ onReturned }: { onReturned: () => void }) {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   useEffect(() => {
     if (searchParams.get("payment") === "success") {
-      toast.success("Payment received — your order is being confirmed.");
-      onConfirmed();
+      onReturned();
       router.replace(window.location.pathname);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -30,10 +29,23 @@ function PaymentSuccessBanner({ onConfirmed }: { onConfirmed: () => void }) {
 export function OrderDetailClient({ initialOrder }: { initialOrder: OrderDetail }) {
   const { data: order = initialOrder } = useOrderDetail(initialOrder.id, initialOrder);
   const retryPayment = useRetryPayment(order.id);
-  const [justConfirmed, setJustConfirmed] = useState(false);
+  const [returnedFromCheckout, setReturnedFromCheckout] = useState(false);
 
   const currentStepIndex = STATUS_STEPS.indexOf(order.status as (typeof STATUS_STEPS)[number]);
   const canRetryPayment = order.payment && (order.payment.status === "FAILED" || order.payment.status === "INITIATED");
+  const paymentStatus = order.payment?.status;
+
+  // Bachs redirects to success_url once the hosted checkout completes, before
+  // the async webhook has actually settled the payment — so a "success"
+  // redirect only means "confirming," not "confirmed." The banner has to
+  // track the real, polled payment status rather than assert success from
+  // the redirect alone, or it can keep claiming success after a payment that
+  // the webhook later marks FAILED (e.g. underpayment, signature mismatch).
+  useEffect(() => {
+    if (returnedFromCheckout && paymentStatus === "SUCCESSFUL") {
+      toast.success("Payment received — your order is being confirmed.");
+    }
+  }, [returnedFromCheckout, paymentStatus]);
 
   async function handleRetryPayment() {
     try {
@@ -47,15 +59,34 @@ export function OrderDetailClient({ initialOrder }: { initialOrder: OrderDetail 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-8">
       <Suspense fallback={null}>
-        <PaymentSuccessBanner onConfirmed={() => setJustConfirmed(true)} />
+        <ReturnFromCheckoutBanner onReturned={() => setReturnedFromCheckout(true)} />
       </Suspense>
 
-      {justConfirmed && (
+      {returnedFromCheckout && paymentStatus === "SUCCESSFUL" && (
         <Card className="mb-6 border border-emerald-200 bg-emerald-50">
           <p className="text-sm font-semibold text-emerald-800">Order confirmed 🎉</p>
           <p className="mt-1 text-sm text-emerald-700">
             Your payment went through and the canteen has your order. We&apos;ll update the status below as it&apos;s
             prepared.
+          </p>
+        </Card>
+      )}
+
+      {returnedFromCheckout && (paymentStatus === "INITIATED" || paymentStatus === "PENDING") && (
+        <Card className="mb-6 border border-line bg-canteen-light">
+          <p className="text-sm font-semibold text-ink">Confirming your payment…</p>
+          <p className="mt-1 text-sm text-muted">
+            This usually takes a few seconds. This page updates automatically — no need to refresh.
+          </p>
+        </Card>
+      )}
+
+      {returnedFromCheckout && paymentStatus === "FAILED" && (
+        <Card className="mb-6 border border-red-200 bg-red-50">
+          <p className="text-sm font-semibold text-red-800">We couldn&apos;t confirm that payment</p>
+          <p className="mt-1 text-sm text-red-700">
+            Your card or transfer wasn&apos;t successfully charged, so this order hasn&apos;t been paid for yet. You can
+            retry below — you won&apos;t be charged twice.
           </p>
         </Card>
       )}
