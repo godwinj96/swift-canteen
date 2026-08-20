@@ -12,6 +12,7 @@ export interface DashboardStats {
 
 export interface DashboardReports {
   revenueByDay: { date: string; revenue: number }[];
+  ordersByHour: { hour: number; count: number }[];
   topItems: { itemId: string; name: string; quantitySold: number }[];
   totalRevenue: number;
   totalOrders: number;
@@ -42,8 +43,17 @@ async function fetchDashboardStats(): Promise<DashboardStats> {
   };
 }
 
-async function fetchDashboardReports(): Promise<DashboardReports> {
-  const res = await fetch("/api/dashboard/reports");
+export interface DateRange {
+  from: string | null;
+  to: string | null;
+}
+
+async function fetchDashboardReports(range?: DateRange): Promise<DashboardReports> {
+  const params = new URLSearchParams();
+  if (range?.from) params.set("from", range.from);
+  if (range?.to) params.set("to", range.to);
+  const query = params.toString();
+  const res = await fetch(`/api/dashboard/reports${query ? `?${query}` : ""}`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Could not load reports");
   return data;
@@ -56,10 +66,14 @@ async function fetchDashboardActivity(): Promise<OrderActivityItem[]> {
   return data.activity;
 }
 
-export function prefetchDashboard(queryClient: QueryClient) {
+export function prefetchDashboard(queryClient: QueryClient, defaultReportsRange?: DateRange) {
+  const range = defaultReportsRange ?? { from: null, to: null };
   return Promise.all([
     queryClient.prefetchQuery({ queryKey: dashboardStatsQueryKey, queryFn: fetchDashboardStats }),
-    queryClient.prefetchQuery({ queryKey: dashboardReportsQueryKey, queryFn: fetchDashboardReports }),
+    queryClient.prefetchQuery({
+      queryKey: [...dashboardReportsQueryKey, range.from, range.to],
+      queryFn: () => fetchDashboardReports(range),
+    }),
     queryClient.prefetchQuery({ queryKey: dashboardActivityQueryKey, queryFn: fetchDashboardActivity }),
   ]);
 }
@@ -73,11 +87,12 @@ export function useDashboardStats(initialData?: DashboardStats) {
   });
 }
 
-export function useDashboardReports(initialData?: DashboardReports) {
+export function useDashboardReports(range: DateRange, initialData?: DashboardReports) {
+  const isDefaultRange = range.from === null && range.to === null;
   return useQuery({
-    queryKey: dashboardReportsQueryKey,
-    queryFn: fetchDashboardReports,
-    initialData,
+    queryKey: [...dashboardReportsQueryKey, range.from, range.to],
+    queryFn: () => fetchDashboardReports(range),
+    initialData: isDefaultRange ? initialData : undefined,
     staleTime: 5 * 60 * 1000,
   });
 }

@@ -167,13 +167,20 @@ export const getAdminReportsData = unstable_cache(
       ...(from ? { gte: new Date(from) } : {}),
       ...(to ? { lte: new Date(to) } : {}),
     };
+    const orderWhere = { status: { not: "CANCELLED" as const }, ...(from || to ? { createdAt: dateFilter } : {}) };
+
     const [orders, topItems] = await Promise.all([
       prisma.order.findMany({
-        where: { status: { not: "CANCELLED" }, ...(from || to ? { createdAt: dateFilter } : {}) },
+        where: orderWhere,
         select: { totalAmount: true, createdAt: true },
       }),
+      // Scoped to the same range as everything else on this page — previously
+      // ignored from/to entirely and always returned all-time top items,
+      // which would have been a confusing mismatch once a visible range
+      // selector exists.
       prisma.orderItem.groupBy({
         by: ["itemId"],
+        where: { order: orderWhere },
         _sum: { quantity: true },
         orderBy: { _sum: { quantity: "desc" } },
         take: 10,
@@ -181,9 +188,12 @@ export const getAdminReportsData = unstable_cache(
     ]);
 
     const revenueByDay = new Map<string, number>();
+    const ordersByHour = new Map<number, number>();
     for (const order of orders) {
       const day = order.createdAt.toISOString().slice(0, 10);
       revenueByDay.set(day, (revenueByDay.get(day) ?? 0) + Number(order.totalAmount));
+      const hour = order.createdAt.getUTCHours();
+      ordersByHour.set(hour, (ordersByHour.get(hour) ?? 0) + 1);
     }
 
     const itemDetails = await prisma.menuItem.findMany({
@@ -194,6 +204,7 @@ export const getAdminReportsData = unstable_cache(
 
     return {
       revenueByDay: Array.from(revenueByDay.entries()).map(([date, revenue]) => ({ date, revenue })),
+      ordersByHour: Array.from({ length: 24 }, (_, hour) => ({ hour, count: ordersByHour.get(hour) ?? 0 })),
       topItems: topItems.map((t) => ({
         itemId: t.itemId,
         name: nameById.get(t.itemId) ?? "Unknown",

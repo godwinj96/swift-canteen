@@ -7,6 +7,7 @@ import { prefetchDashboard } from "@/lib/queries/dashboard";
 import { prefetchMenu } from "@/lib/queries/menu";
 import { prefetchAdminOrders } from "@/lib/queries/adminOrders";
 import { prefetchUsers } from "@/lib/queries/users";
+import { boundsForRange, DEFAULT_ANALYTICS_RANGE } from "@/lib/dateRanges";
 import type { QueryClient } from "@tanstack/react-query";
 import type { Role } from "@prisma/client";
 
@@ -14,7 +15,15 @@ const LINKS: { href: string; label: string; minimumRole: Role; prefetchData?: (q
   { href: "/admin", label: "Dashboard", minimumRole: "STAFF", prefetchData: prefetchDashboard },
   { href: "/admin/menu", label: "Menu", minimumRole: "STAFF", prefetchData: prefetchMenu },
   { href: "/admin/orders", label: "Orders", minimumRole: "STAFF", prefetchData: prefetchAdminOrders },
-  { href: "/admin/reports", label: "Reports", minimumRole: "VENDOR_OWNER", prefetchData: prefetchDashboard },
+  {
+    href: "/admin/reports",
+    label: "Analytics",
+    minimumRole: "VENDOR_OWNER",
+    // Matches the reports page's actual default range, so this prefetch
+    // warms the exact query key the page will read instead of an all-time
+    // range nothing on that page ever requests.
+    prefetchData: (qc) => prefetchDashboard(qc, boundsForRange(DEFAULT_ANALYTICS_RANGE)),
+  },
   { href: "/admin/users", label: "Users", minimumRole: "SITE_ADMIN", prefetchData: prefetchUsers },
 ];
 
