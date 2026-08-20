@@ -240,24 +240,20 @@ export function AdminMenuClient({
                 </span>
               </TableCell>
               <TableCell className="flex gap-2">
-                <button
-                  onClick={() => startEdit(item)}
-                  className="text-xs font-medium text-ink hover:underline"
-                >
+                <Button variant="ghost" size="sm" onClick={() => startEdit(item)}>
                   Edit
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => toggleAvailability.mutate({ id: item.id, isAvailable: !item.isAvailable })}
-                  className="text-xs font-medium text-canteen hover:underline"
+                  disabled={toggleAvailability.isPending}
                 >
                   {item.isAvailable ? "Mark unavailable" : "Mark available"}
-                </button>
-                <button
-                  onClick={() => setPendingDeleteId(item.id)}
-                  className="text-xs font-medium text-red-600 hover:underline"
-                >
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => setPendingDeleteId(item.id)}>
                   Delete
-                </button>
+                </Button>
               </TableCell>
             </TableRow>
           ))}

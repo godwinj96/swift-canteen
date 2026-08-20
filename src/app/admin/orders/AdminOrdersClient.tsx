@@ -4,6 +4,7 @@ import { useState } from "react";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/Badge";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/Table";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Button } from "@/components/ui/Button";
 import type { OrderStatus } from "@prisma/client";
 import { formatNaira } from "@/lib/currency";
 import { useAdminOrders, useAdvanceOrderStatus, type AdminOrderRow } from "@/lib/queries/adminOrders";
@@ -52,20 +53,19 @@ export function AdminOrdersClient({ orders: initialOrders }: { orders: AdminOrde
                 </TableCell>
                 <TableCell className="flex gap-2">
                   {nextStatus && (
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => advanceStatus.mutate({ orderId: order.id, status: nextStatus })}
-                      className="text-xs font-medium text-canteen hover:underline"
+                      disabled={advanceStatus.isPending}
                     >
                       Mark {nextStatus.replace(/_/g, " ").toLowerCase()}
-                    </button>
+                    </Button>
                   )}
                   {order.status !== "CANCELLED" && order.status !== "COMPLETED" && (
-                    <button
-                      onClick={() => setPendingCancelId(order.id)}
-                      className="text-xs font-medium text-red-600 hover:underline"
-                    >
+                    <Button variant="danger" size="sm" onClick={() => setPendingCancelId(order.id)}>
                       Cancel
-                    </button>
+                    </Button>
                   )}
                 </TableCell>
               </TableRow>
