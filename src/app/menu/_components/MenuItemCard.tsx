@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { formatNaira } from "@/lib/currency";
+import { QuantityStepper } from "@/components/ui/QuantityStepper";
 
 interface MenuItemCardProps {
   id: string;
@@ -10,10 +11,22 @@ interface MenuItemCardProps {
   price: number;
   imageUrl: string | null;
   isAvailable: boolean;
+  quantity: number;
   onAdd: (itemId: string) => void;
+  onUpdateQuantity: (itemId: string, quantity: number) => void;
 }
 
-export function MenuItemCard({ id, name, description, price, imageUrl, isAvailable, onAdd }: MenuItemCardProps) {
+export function MenuItemCard({
+  id,
+  name,
+  description,
+  price,
+  imageUrl,
+  isAvailable,
+  quantity,
+  onAdd,
+  onUpdateQuantity,
+}: MenuItemCardProps) {
   return (
     <div className="shadow-elevation-sm hover:shadow-elevation-md flex flex-col gap-3.5 rounded-2xl bg-canteen-light p-4 transition-shadow">
       {imageUrl ? (
@@ -36,13 +49,19 @@ export function MenuItemCard({ id, name, description, price, imageUrl, isAvailab
         </div>
         <span className="shrink-0 font-bold text-canteen-dark">{formatNaira(price)}</span>
       </div>
-      <button
-        onClick={() => onAdd(id)}
-        disabled={!isAvailable}
-        className="w-full rounded-full bg-ink py-3 text-sm font-semibold text-white transition-all hover:bg-canteen-dark active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {isAvailable ? "Add to cart" : "Unavailable"}
-      </button>
+      {quantity > 0 ? (
+        <div className="flex items-center justify-center rounded-full bg-white py-1.5">
+          <QuantityStepper quantity={quantity} onChange={(next) => onUpdateQuantity(id, next)} />
+        </div>
+      ) : (
+        <button
+          onClick={() => onAdd(id)}
+          disabled={!isAvailable}
+          className="w-full rounded-full bg-ink py-3 text-sm font-semibold text-white transition-all hover:bg-canteen-dark active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isAvailable ? "Add to cart" : "Unavailable"}
+        </button>
+      )}
     </div>
   );
 }

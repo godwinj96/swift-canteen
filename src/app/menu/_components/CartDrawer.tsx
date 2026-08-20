@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatNaira } from "@/lib/currency";
+import { QuantityStepper } from "@/components/ui/QuantityStepper";
 
 interface CartItemData {
   itemId: string;
@@ -57,19 +58,11 @@ export function CartDrawer({ open, onClose, items, onUpdateQuantity, onRemove, o
                     <p className="text-xs text-muted">{formatNaira(cartItem.item.price)} each</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onUpdateQuantity(cartItem.itemId, cartItem.quantity - 1)}
-                      className="h-6 w-6 rounded-full border border-line text-ink hover:bg-canteen-light"
-                    >
-                      -
-                    </button>
-                    <span className="w-4 text-center text-sm">{cartItem.quantity}</span>
-                    <button
-                      onClick={() => onUpdateQuantity(cartItem.itemId, cartItem.quantity + 1)}
-                      className="h-6 w-6 rounded-full border border-line text-ink hover:bg-canteen-light"
-                    >
-                      +
-                    </button>
+                    <QuantityStepper
+                      quantity={cartItem.quantity}
+                      onChange={(quantity) => onUpdateQuantity(cartItem.itemId, quantity)}
+                      size="sm"
+                    />
                     <button
                       onClick={() => onRemove(cartItem.itemId)}
                       className="ml-1 text-xs text-red-500 hover:underline"

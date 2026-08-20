@@ -58,6 +58,11 @@ export function MenuPageClient({ categories, items, userId }: MenuPageClientProp
     [cart.lines, itemsById]
   );
 
+  const cartQuantities = useMemo(
+    () => new Map(cart.lines.map((line) => [line.itemId, line.quantity])),
+    [cart.lines]
+  );
+
   const filteredItems = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase();
     return items.filter((item) => {
@@ -90,7 +95,6 @@ export function MenuPageClient({ categories, items, userId }: MenuPageClientProp
     }
     cart.addItem(itemId, 1);
     toast.success(`${item.name} added to cart.`);
-    setCartOpen(true);
   }
 
   function handleUpdateQuantity(itemId: string, quantity: number) {
@@ -115,15 +119,6 @@ export function MenuPageClient({ categories, items, userId }: MenuPageClientProp
           </span>
           <h1 className="font-display text-5xl tracking-tight text-ink">What are we having?</h1>
         </div>
-        <button
-          onClick={() => setCartOpen(true)}
-          className="flex shrink-0 items-center gap-2.5 rounded-full bg-ink px-5 py-3.5 font-semibold text-white hover:bg-canteen-dark"
-        >
-          Cart
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-canteen text-xs font-bold">
-            {cart.count}
-          </span>
-        </button>
       </div>
       <div className="mb-6">
         <SearchInput value={searchInput} onChange={setSearchInput} />
@@ -133,11 +128,29 @@ export function MenuPageClient({ categories, items, userId }: MenuPageClientProp
       </div>
       <MenuGrid
         items={visibleItems}
+        quantities={cartQuantities}
         onAdd={handleAdd}
+        onUpdateQuantity={handleUpdateQuantity}
         emptyMessage={debouncedSearch.trim() ? `No items match "${debouncedSearch.trim()}".` : undefined}
         hasMore={visibleCount < filteredItems.length}
         onLoadMore={() => setVisibleCount((count) => count + PAGE_SIZE)}
       />
+      {cart.count > 0 && (
+        <button
+          onClick={() => setCartOpen(true)}
+          aria-label={`Open cart, ${cart.count} items`}
+          className="fixed right-6 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-30 flex h-14 w-14 items-center justify-center rounded-full bg-canteen text-white shadow-elevation-lg transition-transform hover:bg-canteen-dark active:scale-95"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M3 4h2l1.4 12.6a2 2 0 0 0 2 1.8h7.4a2 2 0 0 0 2-1.7L19 8H6" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="9" cy="20" r="1.4" fill="currentColor" stroke="none" />
+            <circle cx="17" cy="20" r="1.4" fill="currentColor" stroke="none" />
+          </svg>
+          <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[11px] font-bold text-white">
+            {cart.count}
+          </span>
+        </button>
+      )}
       <CartDrawer
         open={cartOpen}
         onClose={() => setCartOpen(false)}
