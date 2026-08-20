@@ -13,6 +13,11 @@ export async function Navbar() {
 
   const links = (
     <>
+      {user && (
+        <Link href="/dashboard" className="text-muted hover:text-canteen">
+          Dashboard
+        </Link>
+      )}
       <PrefetchLink href="/menu" className="hover:text-canteen">
         Menu
       </PrefetchLink>

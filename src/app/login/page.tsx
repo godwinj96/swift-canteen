@@ -33,7 +33,7 @@ function LoginForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Login failed");
       const redirect = searchParams.get("redirect");
-      router.push(isSafeRedirect(redirect) ? redirect : "/menu");
+      router.push(isSafeRedirect(redirect) ? redirect : "/dashboard");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

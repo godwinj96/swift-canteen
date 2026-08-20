@@ -101,6 +101,36 @@ export async function getOrderById(orderId: string, userId: string, role: Role) 
   return order;
 }
 
+/**
+ * Distinct menu items from a customer's past orders, most-recently-ordered
+ * first, for the dashboard's quick-reorder strip. Deliberately not wrapped in
+ * unstable_cache — per-user data must never sit under a shared cache key.
+ */
+export async function getRecentlyOrderedItems(userId: string, limit: number) {
+  const orderItems = await prisma.orderItem.findMany({
+    where: { order: { userId } },
+    include: { item: true },
+    orderBy: { order: { createdAt: "desc" } },
+    take: limit * 4, // over-fetch to have enough distinct items after dedup
+  });
+
+  const seen = new Set<string>();
+  const items: { id: string; name: string; price: number; imageUrl: string | null; isAvailable: boolean }[] = [];
+  for (const orderItem of orderItems) {
+    if (items.length >= limit) break;
+    if (seen.has(orderItem.itemId)) continue;
+    seen.add(orderItem.itemId);
+    items.push({
+      id: orderItem.item.id,
+      name: orderItem.item.name,
+      price: Number(orderItem.item.price),
+      imageUrl: orderItem.item.imageUrl,
+      isAvailable: orderItem.item.isAvailable,
+    });
+  }
+  return items;
+}
+
 export async function updateOrderStatus(orderId: string, newStatus: OrderStatus) {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.order.findUnique({ where: { id: orderId } });

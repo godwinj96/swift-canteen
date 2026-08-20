@@ -7,7 +7,7 @@ const SESSION_COOKIE_NAME = "session";
 
 const ADMIN_PAGE_PREFIX = "/admin";
 const ADMIN_API_PREFIXES = ["/api/dashboard", "/api/admin", "/api/users"];
-const CUSTOMER_PAGE_PREFIXES = ["/checkout", "/orders"];
+const CUSTOMER_PAGE_PREFIXES = ["/checkout", "/orders", "/dashboard"];
 
 function getSecretKey(): Uint8Array {
   return new TextEncoder().encode(process.env.AUTH_SECRET ?? "");
@@ -62,6 +62,7 @@ export const config = {
     "/admin/:path*",
     "/checkout/:path*",
     "/orders/:path*",
+    "/dashboard/:path*",
     "/api/dashboard/:path*",
     "/api/admin/:path*",
     "/api/users/:path*",
