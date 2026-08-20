@@ -1,4 +1,4 @@
-import { HTMLAttributes, TableHTMLAttributes } from "react";
+import { HTMLAttributes, TableHTMLAttributes, TdHTMLAttributes, ThHTMLAttributes } from "react";
 
 export function Table(props: TableHTMLAttributes<HTMLTableElement>) {
   return (
@@ -20,10 +20,10 @@ export function TableRow(props: HTMLAttributes<HTMLTableRowElement>) {
   return <tr {...props} />;
 }
 
-export function TableCell(props: HTMLAttributes<HTMLTableCellElement>) {
-  return <td className="px-5 py-4 text-ink" {...props} />;
+export function TableCell({ className = "", ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
+  return <td className={`px-5 py-4 text-ink ${className}`} {...props} />;
 }
 
-export function TableHeaderCell(props: HTMLAttributes<HTMLTableCellElement>) {
+export function TableHeaderCell(props: ThHTMLAttributes<HTMLTableCellElement>) {
   return <th className="px-5 py-4 font-medium" {...props} />;
 }

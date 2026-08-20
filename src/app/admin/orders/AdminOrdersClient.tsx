@@ -1,27 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Tabs, type TabItem } from "@/components/ui/Tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/Table";
 import type { OrderStatus } from "@prisma/client";
 import { formatNaira } from "@/lib/currency";
 import { canTransitionOrder } from "@/lib/orders/stateMachine";
 import { useAdminOrders, useAdvanceOrderStatus, type AdminOrderRow } from "@/lib/queries/adminOrders";
 
-// The concrete fix for "orders are easy to mix up": one column per live
-// stage (a kitchen-display-system board, not a flat table), each order
-// rendered as a card with a large order number, an elapsed-time chip that
-// escalates color the longer it's waited, and a single contextual action
-// button — reusing the existing NEXT_STATUS/useAdvanceOrderStatus mutation,
-// just exposing PENDING -> CONFIRMED, which the table view never did.
-const COLUMNS: { status: OrderStatus; label: string }[] = [
-  { status: "PENDING", label: "New" },
-  { status: "CONFIRMED", label: "Accepted" },
-  { status: "PREPARING", label: "Preparing" },
-  { status: "READY_FOR_PICKUP", label: "Ready for pickup" },
-];
+// Replaces the earlier Kanban-column layout: per Toast/Square/DoorDash's
+// order-management pattern, a queue that has to scale past a handful of
+// concurrent orders needs status TABS over one scannable list, not parallel
+// columns you scroll sideways through. Tab names map UNIBEN-canteen-scale
+// stages onto the researched pattern (Toast's "Needs Approval / Active /
+// Ready / Completed"): CONFIRMED and PREPARING share a tab since both are
+// "being worked, not yet ready" from an admin's point of view.
+type QueueTabId = "needsAcceptance" | "preparing" | "ready" | "completed";
+
+const TAB_STATUSES: Record<QueueTabId, OrderStatus[]> = {
+  needsAcceptance: ["PENDING"],
+  preparing: ["CONFIRMED", "PREPARING"],
+  ready: ["READY_FOR_PICKUP"],
+  completed: ["COMPLETED", "CANCELLED"],
+};
+
+const TAB_ORDER: QueueTabId[] = ["needsAcceptance", "preparing", "ready", "completed"];
+const TAB_LABELS: Record<QueueTabId, string> = {
+  needsAcceptance: "Needs Acceptance",
+  preparing: "Preparing",
+  ready: "Ready",
+  completed: "Completed",
+};
 
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   PENDING: "CONFIRMED",
@@ -37,40 +49,44 @@ const ACTION_LABEL: Partial<Record<OrderStatus, string>> = {
   READY_FOR_PICKUP: "Complete",
 };
 
-const COLUMN_ACCENT: Record<OrderStatus, string> = {
-  PENDING: "border-l-stone-400",
-  CONFIRMED: "border-l-blue-400",
-  PREPARING: "border-l-amber-400",
-  READY_FOR_PICKUP: "border-l-purple-400",
-  COMPLETED: "border-l-green-400",
-  CANCELLED: "border-l-red-400",
-};
-
 const AMBER_AFTER_MINUTES = 10;
 const RED_AFTER_MINUTES = 20;
+const SEEN_ORDERS_KEY = "swift-canteen-admin-seen-orders";
 
-// Ticks every 30s so the elapsed-time coloring stays live without a full
-// order refetch — Date.now() itself is read inside the effect, not render.
 function useNow(intervalMs: number) {
-  const [now, setNow] = useState(() => Date.now());
+  // Starts null (not Date.now()) so the server render and the client's first
+  // pre-hydration render agree — reading Date.now() as the initial state
+  // produces a different value on the server than at client hydration time,
+  // which is a real hydration-mismatch source for any "time ago" display.
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    const rafId = requestAnimationFrame(() => {
+      setNow(Date.now());
+      intervalId = setInterval(() => setNow(Date.now()), intervalMs);
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [intervalMs]);
   return now;
 }
 
 function ElapsedChip({ createdAt }: { createdAt: string }) {
   const now = useNow(30000);
+  if (now === null) {
+    return <span className="inline-flex items-center rounded-full bg-line px-2 py-0.5 text-[11px] font-semibold text-muted">—</span>;
+  }
   const minutes = Math.max(0, Math.round((now - new Date(createdAt).getTime()) / 60000));
   const classes =
     minutes >= RED_AFTER_MINUTES
-      ? "bg-red-100 text-red-700"
+      ? "bg-canteen text-white"
       : minutes >= AMBER_AFTER_MINUTES
-        ? "bg-amber-100 text-amber-700"
-        : "bg-stone-100 text-stone-600";
+        ? "bg-canteen-light text-canteen-dark"
+        : "bg-line text-muted";
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${classes}`}>
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${classes}`}>
       {minutes < 1 ? "just now" : `${minutes}m ago`}
     </span>
   );
@@ -80,118 +96,172 @@ function itemSummary(items: AdminOrderRow["items"]): string {
   return items.map((i) => `${i.quantity}× ${i.name}`).join(", ");
 }
 
-function OrderCard({
-  order,
-  onAdvance,
-  onCancel,
-  pending,
-}: {
-  order: AdminOrderRow;
-  onAdvance: (status: OrderStatus) => void;
-  onCancel: () => void;
-  pending: boolean;
-}) {
-  const nextStatus = NEXT_STATUS[order.status];
-  const canCancel = canTransitionOrder(order.status, "CANCELLED");
-
-  return (
-    <Card className={`border-l-4 p-4 ${COLUMN_ACCENT[order.status]}`}>
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <span className="font-mono text-base font-bold text-ink">#{order.id.slice(-8)}</span>
-        <ElapsedChip createdAt={order.createdAt} />
-      </div>
-      <p className="mb-1 text-sm font-semibold text-ink">{order.customerName}</p>
-      {order.items.length > 0 && <p className="mb-2 line-clamp-2 text-xs text-muted">{itemSummary(order.items)}</p>}
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-bold text-canteen-dark">{formatNaira(order.totalAmount)}</span>
-        {order.paymentStatus && <PaymentStatusBadge status={order.paymentStatus} />}
-      </div>
-      <div className="flex gap-2">
-        {nextStatus && (
-          <Button variant="primary" size="sm" onClick={() => onAdvance(nextStatus)} disabled={pending} className="flex-1">
-            {ACTION_LABEL[order.status]}
-          </Button>
-        )}
-        {canCancel && (
-          <Button variant="ghost" size="sm" onClick={onCancel} disabled={pending}>
-            Cancel
-          </Button>
-        )}
-      </div>
-    </Card>
-  );
+function readSeenOrders(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.sessionStorage.getItem(SEEN_ORDERS_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
 }
 
 export function AdminOrdersClient({ orders: initialOrders }: { orders: AdminOrderRow[] }) {
   const { data: orders = initialOrders } = useAdminOrders(initialOrders);
   const advanceStatus = useAdvanceOrderStatus();
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [search, setSearch] = useState("");
+  const [seenOrders, setSeenOrders] = useState<Set<string>>(() => new Set());
+  const [activeTab, setActiveTab] = useState<QueueTabId | null>(null);
 
-  const completedOrCancelled = orders.filter((o) => o.status === "COMPLETED" || o.status === "CANCELLED");
+  useEffect(() => {
+    // Nested in a rAF callback (not called synchronously in the effect body)
+    // so this is a post-hydration settle, not a same-tick cascading render.
+    const id = requestAnimationFrame(() => setSeenOrders(readSeenOrders()));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const countsByTab = useMemo(() => {
+    const counts: Record<QueueTabId, number> = { needsAcceptance: 0, preparing: 0, ready: 0, completed: 0 };
+    for (const order of orders) {
+      const tab = TAB_ORDER.find((id) => TAB_STATUSES[id].includes(order.status));
+      if (tab) counts[tab]++;
+    }
+    return counts;
+  }, [orders]);
+
+  // Default to the most-actionable tab, falling back if it's empty — per
+  // Toast's "opens on Needs Approval" finding — computed once counts are
+  // known rather than hardcoded, so an empty queue doesn't open on a dead tab.
+  useEffect(() => {
+    if (activeTab !== null) return;
+    const id = requestAnimationFrame(() => {
+      if (countsByTab.needsAcceptance > 0) setActiveTab("needsAcceptance");
+      else if (countsByTab.preparing > 0) setActiveTab("preparing");
+      else setActiveTab("needsAcceptance");
+    });
+    return () => cancelAnimationFrame(id);
+  }, [activeTab, countsByTab]);
+
+  const resolvedTab = activeTab ?? "needsAcceptance";
+
+  const tabs: TabItem[] = TAB_ORDER.map((id) => ({
+    id,
+    label: TAB_LABELS[id],
+    count: countsByTab[id],
+    hot: id === "needsAcceptance",
+  }));
+
+  const query = search.trim().toLowerCase();
+  const visibleOrders = orders
+    .filter((order) => TAB_STATUSES[resolvedTab].includes(order.status))
+    .filter((order) => {
+      if (!query) return true;
+      return order.id.toLowerCase().includes(query) || order.customerName.toLowerCase().includes(query);
+    });
+
+  function markSeen(orderId: string) {
+    if (seenOrders.has(orderId)) return;
+    const next = new Set(seenOrders).add(orderId);
+    setSeenOrders(next);
+    try {
+      window.sessionStorage.setItem(SEEN_ORDERS_KEY, JSON.stringify([...next]));
+    } catch {
+      // sessionStorage unavailable — the dot just won't persist across reloads, non-critical
+    }
+  }
 
   return (
     <div>
-      <span className="text-[13px] font-semibold tracking-[0.08em] text-canteen uppercase">Live queue</span>
-      <h1 className="font-display mt-2 mb-8 text-4xl tracking-tight text-ink">Order Queue</h1>
-
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {COLUMNS.map((column) => {
-          const columnOrders = orders.filter((o) => o.status === column.status);
-          return (
-            <div key={column.status} className="flex w-72 shrink-0 flex-col gap-3">
-              <div className="flex items-center justify-between px-1">
-                <h2 className="text-sm font-semibold text-ink">{column.label}</h2>
-                <span className="text-xs font-medium text-muted">{columnOrders.length}</span>
-              </div>
-              <div className="flex flex-col gap-3">
-                {columnOrders.length === 0 && (
-                  <p className="rounded-2xl border border-dashed border-line p-4 text-center text-xs text-muted">
-                    No orders here
-                  </p>
-                )}
-                {columnOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    pending={advanceStatus.isPending}
-                    onAdvance={(status) => advanceStatus.mutate({ orderId: order.id, status })}
-                    onCancel={() => setPendingCancelId(order.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <span className="text-[13px] font-semibold tracking-[0.08em] text-canteen uppercase">Live queue</span>
+          <h1 className="font-display mt-2 text-4xl tracking-tight text-ink">Order Queue</h1>
+        </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search order # or customer"
+          className="w-full max-w-xs rounded-full border border-line px-4 py-2.5 text-sm text-ink placeholder:text-muted focus:border-canteen focus:outline-none"
+        />
       </div>
 
-      <div className="mt-8">
-        <button
-          onClick={() => setShowCompleted((v) => !v)}
-          className="text-sm font-semibold text-canteen hover:underline"
-        >
-          {showCompleted ? "Hide" : "Show"} completed &amp; cancelled ({completedOrCancelled.length})
-        </button>
-        {showCompleted && (
-          <div className="mt-4 flex flex-col gap-2">
-            {completedOrCancelled.map((order) => (
-              <div
-                key={order.id}
-                className="flex items-center justify-between rounded-xl border border-line bg-white px-4 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-sm font-semibold text-ink">#{order.id.slice(-8)}</span>
-                  <span className="text-sm text-muted">{order.customerName}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-ink">{formatNaira(order.totalAmount)}</span>
-                  <OrderStatusBadge status={order.status} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="mb-6">
+        <Tabs tabs={tabs} activeId={resolvedTab} onSelect={(id) => setActiveTab(id as QueueTabId)} />
       </div>
+
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableHeaderCell>Order</TableHeaderCell>
+            <TableHeaderCell>Customer &amp; items</TableHeaderCell>
+            <TableHeaderCell>Elapsed</TableHeaderCell>
+            <TableHeaderCell>Payment</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell>Action</TableHeaderCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {visibleOrders.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center text-muted">
+                No orders in this tab.
+              </TableCell>
+            </TableRow>
+          )}
+          {visibleOrders.map((order) => {
+            const nextStatus = NEXT_STATUS[order.status];
+            const canCancel = canTransitionOrder(order.status, "CANCELLED");
+            const isUnseen = resolvedTab === "needsAcceptance" && !seenOrders.has(order.id);
+            return (
+              <TableRow key={order.id} onMouseEnter={() => markSeen(order.id)}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    {isUnseen && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-canteen" aria-label="New" />}
+                    <span className="font-mono font-bold text-ink">#{order.id.slice(-8)}</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <p className="font-medium text-ink">{order.customerName}</p>
+                  {order.items.length > 0 && (
+                    <p className="line-clamp-1 text-xs text-muted">{itemSummary(order.items)}</p>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <ElapsedChip createdAt={order.createdAt} />
+                </TableCell>
+                <TableCell>{order.paymentStatus ? <PaymentStatusBadge status={order.paymentStatus} /> : "—"}</TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1">
+                    <OrderStatusBadge status={order.status} />
+                    <span className="font-semibold text-ink tabular-nums">{formatNaira(order.totalAmount)}</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    {nextStatus && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => advanceStatus.mutate({ orderId: order.id, status: nextStatus })}
+                        disabled={advanceStatus.isPending}
+                      >
+                        {ACTION_LABEL[order.status]}
+                      </Button>
+                    )}
+                    {canCancel && (
+                      <Button variant="ghost" size="sm" onClick={() => setPendingCancelId(order.id)}>
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
 
       <ConfirmDialog
         open={pendingCancelId !== null}
