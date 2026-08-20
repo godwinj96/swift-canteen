@@ -45,7 +45,10 @@ export default async function DashboardPage() {
     .map((order) => ({
       id: order.id,
       status: order.status,
-      createdAt: order.createdAt.toISOString(),
+      // listOrdersForUser is unstable_cache-wrapped: on a cache hit, values
+      // come back JSON-round-tripped, so createdAt is already a string, not
+      // a Date — new Date(...) normalizes either case before formatting.
+      createdAt: new Date(order.createdAt).toISOString(),
       totalAmount: Number(order.totalAmount),
       items: order.items.map((oi) => ({ name: oi.item.name, quantity: oi.quantity })),
       paymentStatus: order.payment?.status ?? null,
