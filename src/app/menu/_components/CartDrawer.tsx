@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { formatNaira } from "@/lib/currency";
 import { QuantityStepper } from "@/components/ui/QuantityStepper";
 
@@ -16,21 +15,11 @@ interface CartDrawerProps {
   items: CartItemData[];
   onUpdateQuantity: (itemId: string, quantity: number) => void;
   onRemove: (itemId: string) => void;
-  onCheckout: () => Promise<void>;
+  onCheckout: () => void;
 }
 
 export function CartDrawer({ open, onClose, items, onUpdateQuantity, onRemove, onCheckout }: CartDrawerProps) {
-  const [checkingOut, setCheckingOut] = useState(false);
   const total = items.reduce((sum, i) => sum + i.item.price * i.quantity, 0);
-
-  async function handleCheckoutClick() {
-    setCheckingOut(true);
-    try {
-      await onCheckout();
-    } finally {
-      setCheckingOut(false);
-    }
-  }
 
   return (
     <>
@@ -81,11 +70,11 @@ export function CartDrawer({ open, onClose, items, onUpdateQuantity, onRemove, o
             <span>{formatNaira(total)}</span>
           </div>
           <button
-            disabled={items.length === 0 || checkingOut}
-            onClick={handleCheckoutClick}
+            disabled={items.length === 0}
+            onClick={onCheckout}
             className="w-full rounded-full bg-canteen py-3.5 font-semibold text-white hover:bg-canteen-dark disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {checkingOut ? "Preparing checkout..." : "Checkout"}
+            Checkout
           </button>
         </div>
       </div>

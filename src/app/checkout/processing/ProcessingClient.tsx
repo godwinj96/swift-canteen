@@ -1,23 +1,38 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatNaira } from "@/lib/currency";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { useLocalCart } from "@/lib/cart/useLocalCart";
 
-interface CartItemData {
+interface CatalogItem {
   id: string;
-  quantity: number;
-  item: { id: string; name: string; price: number };
+  name: string;
+  price: number;
 }
 
-export function ProcessingClient({ items }: { items: CartItemData[] }) {
+export function ProcessingClient({ userId, catalog }: { userId: string; catalog: CatalogItem[] }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const pickup = searchParams.get("pickup");
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
+
+  const cart = useLocalCart(userId);
+  const catalogById = useMemo(() => new Map(catalog.map((i) => [i.id, i])), [catalog]);
+  const items = useMemo(
+    () =>
+      cart.lines
+        .map((line) => {
+          const item = catalogById.get(line.itemId);
+          return item ? { id: line.itemId, quantity: line.quantity, item } : null;
+        })
+        .filter((line): line is { id: string; quantity: number; item: CatalogItem } => line !== null),
+    [cart.lines, catalogById]
+  );
 
   const total = items.reduce((sum, i) => sum + i.item.price * i.quantity, 0);
 
@@ -25,10 +40,18 @@ export function ProcessingClient({ items }: { items: CartItemData[] }) {
     // StrictMode/fast-refresh re-runs effects — guard against placing the
     // order twice from a single navigation.
     if (startedRef.current) return;
+    if (items.length === 0) return; // still hydrating the local cart on first mount
     startedRef.current = true;
 
     (async () => {
       try {
+        // The one point in the whole checkout flow that genuinely needs the
+        // server-side Cart row to reflect exactly what's in localStorage —
+        // placeOrder() reads from the DB, not from this client's state — so
+        // this is the one sync worth awaiting, and it's already inside a
+        // page whose only job is "this is in progress."
+        await cart.forceSyncNow();
+
         const orderRes = await fetch("/api/orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -50,7 +73,16 @@ export function ProcessingClient({ items }: { items: CartItemData[] }) {
         setError(err instanceof Error ? err.message : "Checkout failed");
       }
     })();
-  }, [pickup]);
+  }, [pickup, items.length, cart]);
+
+  // Local cart is genuinely empty (not just still hydrating) — nothing to process.
+  useEffect(() => {
+    if (startedRef.current || items.length > 0) return;
+    const id = requestAnimationFrame(() => {
+      if (!startedRef.current && items.length === 0) router.replace("/checkout");
+    });
+    return () => cancelAnimationFrame(id);
+  }, [items.length, router]);
 
   return (
     <div className="mx-auto max-w-lg px-4 sm:px-8 py-16">

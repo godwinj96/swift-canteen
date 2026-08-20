@@ -105,8 +105,14 @@ export function MenuPageClient({ categories, items, userId }: MenuPageClientProp
     cart.removeItem(itemId);
   }
 
-  async function handleCheckout() {
-    await cart.forceSyncNow();
+  function handleCheckout() {
+    // Fire-and-forget: /checkout reads the local cart directly (localStorage,
+    // synchronous) rather than waiting on a server round trip, so the click
+    // navigates instantly. The background sync (also running on its own
+    // debounce) keeps the server Cart row eventually consistent; the one
+    // point that actually needs a synced server cart -- order creation -- is
+    // handled in the processing step by awaiting a fresh forceSyncNow there.
+    void cart.forceSyncNow();
     router.push("/checkout");
   }
 

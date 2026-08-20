@@ -1,16 +1,17 @@
 "use client";
 
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatNaira } from "@/lib/currency";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { useLocalCart } from "@/lib/cart/useLocalCart";
 
-interface CartItemData {
+interface CatalogItem {
   id: string;
-  quantity: number;
-  item: { id: string; name: string; price: number };
+  name: string;
+  price: number;
 }
 
 function CancelledPaymentBanner() {
@@ -30,17 +31,28 @@ function CancelledPaymentBanner() {
   );
 }
 
-export function CheckoutClient({ items }: { items: CartItemData[] }) {
+export function CheckoutClient({ userId, catalog }: { userId: string; catalog: CatalogItem[] }) {
   const router = useRouter();
   const [pickupTime, setPickupTime] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const cart = useLocalCart(userId);
+  const catalogById = useMemo(() => new Map(catalog.map((i) => [i.id, i])), [catalog]);
+  const items = useMemo(
+    () =>
+      cart.lines
+        .map((line) => {
+          const item = catalogById.get(line.itemId);
+          return item ? { id: line.itemId, quantity: line.quantity, item } : null;
+        })
+        .filter((line): line is { id: string; quantity: number; item: CatalogItem } => line !== null),
+    [cart.lines, catalogById]
+  );
 
   const total = items.reduce((sum, i) => sum + i.item.price * i.quantity, 0);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
     setLoading(true);
     // Nothing here calls Bachs or even creates the order yet — this is a
     // plain client-side route change, so the click responds instantly. The
@@ -102,7 +114,6 @@ export function CheckoutClient({ items }: { items: CartItemData[] }) {
             className="w-full rounded-xl border border-line px-4 py-3 text-sm focus:border-canteen focus:outline-none"
           />
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
         <Button type="submit" disabled={loading} className="w-full">
           {loading ? "Redirecting to payment..." : "Pay now"}
         </Button>
