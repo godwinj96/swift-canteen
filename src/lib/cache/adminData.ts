@@ -8,28 +8,93 @@ import { prisma } from "@/lib/prisma";
 // this is a "cheap tab switch," not a stale dashboard.
 const REVALIDATE_SECONDS = 20;
 
+const TREND_DAYS = 7;
+
+/** Builds the last `days` YYYY-MM-DD keys, oldest first, so a trend series always has one point per day even if an order-free day would otherwise be missing from a DB aggregation. */
+function recentDayKeys(days: number): string[] {
+  const keys: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - i);
+    keys.push(d.toISOString().slice(0, 10));
+  }
+  return keys;
+}
+
 export const getAdminDashboardStats = unstable_cache(
   async () => {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-    const [todayOrders, pendingOrders, todayRevenue, totalMenuItems] = await Promise.all([
-      prisma.order.count({ where: { createdAt: { gte: startOfDay } } }),
-      prisma.order.count({ where: { status: { in: ["PENDING", "CONFIRMED", "PREPARING"] } } }),
-      prisma.order.aggregate({
-        where: { createdAt: { gte: startOfDay }, status: { not: "CANCELLED" } },
-        _sum: { totalAmount: true },
-      }),
-      prisma.menuItem.count({ where: { isAvailable: true } }),
-    ]);
+    const trendStart = new Date();
+    trendStart.setHours(0, 0, 0, 0);
+    trendStart.setDate(trendStart.getDate() - (TREND_DAYS - 1));
+
+    const [todayOrders, ordersAwaitingAcceptance, pendingOrders, todayRevenue, totalMenuItems, trendOrders] =
+      await Promise.all([
+        prisma.order.count({ where: { createdAt: { gte: startOfDay } } }),
+        prisma.order.count({ where: { status: "PENDING" } }),
+        prisma.order.count({ where: { status: { in: ["PENDING", "CONFIRMED", "PREPARING"] } } }),
+        prisma.order.aggregate({
+          where: { createdAt: { gte: startOfDay }, status: { not: "CANCELLED" } },
+          _sum: { totalAmount: true },
+        }),
+        prisma.menuItem.count({ where: { isAvailable: true } }),
+        prisma.order.findMany({
+          where: { createdAt: { gte: trendStart }, status: { not: "CANCELLED" } },
+          select: { totalAmount: true, createdAt: true },
+        }),
+      ]);
+
+    const revenueByDay = new Map<string, number>();
+    const ordersByDay = new Map<string, number>();
+    for (const order of trendOrders) {
+      const day = order.createdAt.toISOString().slice(0, 10);
+      revenueByDay.set(day, (revenueByDay.get(day) ?? 0) + Number(order.totalAmount));
+      ordersByDay.set(day, (ordersByDay.get(day) ?? 0) + 1);
+    }
+    const revenueTrend = recentDayKeys(TREND_DAYS).map((date) => ({
+      date,
+      revenue: revenueByDay.get(date) ?? 0,
+      orders: ordersByDay.get(date) ?? 0,
+    }));
+
     return {
       todayOrders,
+      ordersAwaitingAcceptance,
       pendingOrders,
       todayRevenue: Number(todayRevenue._sum.totalAmount ?? 0),
       totalMenuItems,
+      revenueTrend,
     };
   },
   ["admin-dashboard-stats"],
   { revalidate: REVALIDATE_SECONDS, tags: ["admin-dashboard"] }
+);
+
+/**
+ * Recent-activity feed for the admin home "needs attention / what just
+ * happened" panel. No audit-log table exists (out of scope to add for this
+ * pass) — approximated from Order.updatedAt, inferring the activity line
+ * from the order's current status. Good enough for a glanceable feed; not a
+ * substitute for a real event log if that's ever needed.
+ */
+export const getRecentOrderActivity = unstable_cache(
+  async (limit: number) => {
+    const orders = await prisma.order.findMany({
+      orderBy: { updatedAt: "desc" },
+      take: limit,
+      select: { id: true, status: true, updatedAt: true, user: { select: { fullName: true } } },
+    });
+    return orders.map((o) => ({
+      orderId: o.id,
+      status: o.status,
+      customerName: o.user.fullName,
+      updatedAt: o.updatedAt.toISOString(),
+    }));
+  },
+  ["admin-recent-activity"],
+  { revalidate: REVALIDATE_SECONDS, tags: ["admin-orders", "admin-dashboard"] }
 );
 
 export const getAdminMenuData = unstable_cache(

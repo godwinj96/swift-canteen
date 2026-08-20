@@ -10,6 +10,7 @@ import type { OrderStatus } from "@prisma/client";
 import { formatNaira } from "@/lib/currency";
 import { canTransitionOrder } from "@/lib/orders/stateMachine";
 import { useAdminOrders, useAdvanceOrderStatus, type AdminOrderRow } from "@/lib/queries/adminOrders";
+import { useNow } from "@/lib/hooks/useNow";
 
 // Replaces the earlier Kanban-column layout: per Toast/Square/DoorDash's
 // order-management pattern, a queue that has to scale past a handful of
@@ -52,26 +53,6 @@ const ACTION_LABEL: Partial<Record<OrderStatus, string>> = {
 const AMBER_AFTER_MINUTES = 10;
 const RED_AFTER_MINUTES = 20;
 const SEEN_ORDERS_KEY = "swift-canteen-admin-seen-orders";
-
-function useNow(intervalMs: number) {
-  // Starts null (not Date.now()) so the server render and the client's first
-  // pre-hydration render agree — reading Date.now() as the initial state
-  // produces a different value on the server than at client hydration time,
-  // which is a real hydration-mismatch source for any "time ago" display.
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-    const rafId = requestAnimationFrame(() => {
-      setNow(Date.now());
-      intervalId = setInterval(() => setNow(Date.now()), intervalMs);
-    });
-    return () => {
-      cancelAnimationFrame(rafId);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [intervalMs]);
-  return now;
-}
 
 function ElapsedChip({ createdAt }: { createdAt: string }) {
   const now = useNow(30000);
