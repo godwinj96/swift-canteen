@@ -38,32 +38,17 @@ export function CheckoutClient({ items }: { items: CartItemData[] }) {
 
   const total = items.reduce((sum, i) => sum + i.item.price * i.quantity, 0);
 
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    try {
-      const orderRes = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pickupTime ? { pickupTime: new Date(pickupTime).toISOString() } : {}),
-      });
-      const orderData = await orderRes.json();
-      if (!orderRes.ok) throw new Error(orderData.error ?? "Could not place order");
-
-      const paymentRes = await fetch("/api/payments/initiate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: orderData.order.id }),
-      });
-      const paymentData = await paymentRes.json();
-      if (!paymentRes.ok) throw new Error(paymentData.error ?? "Could not start payment");
-
-      window.location.href = paymentData.checkoutUrl;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Checkout failed");
-      setLoading(false);
-    }
+    // Nothing here calls Bachs or even creates the order yet — this is a
+    // plain client-side route change, so the click responds instantly. The
+    // order-creation and payment-initiation calls (the actual DB/network
+    // work) happen on /checkout/processing, a page whose whole purpose is
+    // "this is in progress," instead of behind an unresponsive button.
+    const qs = pickupTime ? `?pickup=${encodeURIComponent(pickupTime)}` : "";
+    router.push(`/checkout/processing${qs}`);
   }
 
   if (items.length === 0) {
