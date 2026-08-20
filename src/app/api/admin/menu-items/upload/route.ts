@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { toErrorResponse, ApiError } from "@/lib/errors";
 import { requireRole } from "@/lib/auth/guards";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
     const path = `${randomUUID()}.${extension}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin.storage.from("menu-images").upload(path, buffer, {
       contentType: file.type,
       upsert: false,
