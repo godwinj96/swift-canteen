@@ -27,7 +27,7 @@ export async function Navbar() {
           Admin
         </Link>
       )}
-      {user && <CartBadge />}
+      {user && <CartBadge userId={user.sub} />}
       {user ? (
         <LogoutButton />
       ) : (

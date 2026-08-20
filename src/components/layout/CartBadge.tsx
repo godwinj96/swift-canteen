@@ -1,9 +1,24 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useLocalCartCount } from "@/lib/cart/useLocalCart";
+import { setLocalCartOwner } from "@/lib/cart/localCart";
 
-export function CartBadge() {
+// CartBadge renders on every page via Navbar, but the local cart's owner
+// scope (see localCart.ts) is a module-level singleton — until now, only
+// useLocalCart (mounted on /menu) ever called setLocalCartOwner. A user who
+// logs in and lands anywhere other than /menu first (or navigates there via
+// client-side routing, which keeps this module's state alive across the
+// navigation) would see the previous owner's cart bucket — stale items from
+// a prior account, or a guest cart bleeding into a fresh login — until /menu
+// happened to mount. Scoping it here too closes that gap: the badge is the
+// one cart-reading surface guaranteed to mount on every authenticated page.
+export function CartBadge({ userId }: { userId: string }) {
+  useEffect(() => {
+    setLocalCartOwner(userId);
+  }, [userId]);
+
   const count = useLocalCartCount();
 
   return (
