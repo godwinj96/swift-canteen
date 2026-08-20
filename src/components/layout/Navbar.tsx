@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Logomark } from "@/components/ui/Logomark";
 import { getSessionUser } from "@/lib/auth/session";
 import { hasMinimumRole } from "@/lib/auth/roles";
 import { LogoutButton } from "./LogoutButton";
@@ -54,7 +55,8 @@ export async function Navbar() {
   return (
     <header className="relative bg-white">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-8 sm:py-7 lg:px-12 xl:px-16">
-        <Link href="/" className="font-display text-2xl tracking-tight text-ink">
+        <Link href="/" className="flex items-center gap-2.5 font-display text-2xl tracking-tight text-ink">
+          <Logomark />
           Swift Canteen
         </Link>
         <nav className="hidden items-center gap-10 text-[15px] font-medium text-ink md:flex">{links}</nav>
