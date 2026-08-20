@@ -4,7 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { listOrdersForUser, getRecentlyOrderedItems } from "@/lib/orders/service";
 import { DashboardClient } from "./DashboardClient";
 
-const PENDING_STATUSES = ["PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP"];
+const ACTIVE_STATUSES = ["PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP"];
+// Ready-for-pickup is the most actionable state ("go get your food now"),
+// then preparing/confirmed, then just-placed — used to pick the single
+// order that earns the hero module when a customer has more than one
+// active order at once.
+const ACTIVE_PRIORITY: Record<string, number> = {
+  READY_FOR_PICKUP: 0,
+  PREPARING: 1,
+  CONFIRMED: 1,
+  PENDING: 2,
+};
 
 export default async function DashboardPage() {
   const user = await getSessionUser();
@@ -16,22 +26,36 @@ export default async function DashboardPage() {
     getRecentlyOrderedItems(user.sub, 6),
   ]);
 
-  const pendingOrders = orders
-    .filter((order) => PENDING_STATUSES.includes(order.status))
+  const activeOrders = orders
+    .filter((order) => ACTIVE_STATUSES.includes(order.status))
+    .sort((a, b) => ACTIVE_PRIORITY[a.status] - ACTIVE_PRIORITY[b.status]);
+  const heroOrder = activeOrders[0]
+    ? {
+        id: activeOrders[0].id,
+        status: activeOrders[0].status,
+        totalAmount: Number(activeOrders[0].totalAmount),
+        itemCount: activeOrders[0].items.length,
+      }
+    : null;
+
+  // Everything else — every order, active or not, minus the one already
+  // promoted to the hero — goes in the demoted history table below.
+  const historyOrders = orders
+    .filter((order) => order.id !== heroOrder?.id)
     .map((order) => ({
       id: order.id,
       status: order.status,
+      createdAt: order.createdAt.toISOString(),
       totalAmount: Number(order.totalAmount),
-      itemCount: order.items.length,
+      items: order.items.map((oi) => ({ name: oi.item.name, quantity: oi.quantity })),
       paymentStatus: order.payment?.status ?? null,
-    }))
-    // Ready-for-pickup orders are the most actionable ("go get your food now") — surface first.
-    .sort((a, b) => Number(b.status === "READY_FOR_PICKUP") - Number(a.status === "READY_FOR_PICKUP"));
+    }));
 
   return (
     <DashboardClient
       firstName={profile?.fullName?.split(" ")[0] ?? "there"}
-      pendingOrders={pendingOrders}
+      heroOrder={heroOrder}
+      historyOrders={historyOrders}
       recentItems={recentItems}
     />
   );
