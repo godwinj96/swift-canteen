@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { toErrorResponse } from "@/lib/errors";
 import { requireRole } from "@/lib/auth/guards";
@@ -22,6 +23,8 @@ export async function POST(request: NextRequest) {
     await requireRole("VENDOR_OWNER");
     const body = categoryCreateSchema.parse(await request.json());
     const category = await prisma.category.create({ data: body });
+    revalidateTag("admin-menu");
+    revalidateTag("public-menu");
     return NextResponse.json({ category }, { status: 201 });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

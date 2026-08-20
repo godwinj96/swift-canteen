@@ -110,7 +110,9 @@ async function main() {
 
   for (const item of items) {
     const existing = await prisma.menuItem.findFirst({ where: { name: item.name } });
-    if (!existing) {
+    if (existing) {
+      await prisma.menuItem.update({ where: { id: existing.id }, data: item });
+    } else {
       await prisma.menuItem.create({ data: item });
     }
   }

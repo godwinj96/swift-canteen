@@ -3,7 +3,9 @@ import { getSessionUser } from "@/lib/auth/session";
 import { hasMinimumRole } from "@/lib/auth/roles";
 import { LogoutButton } from "./LogoutButton";
 import { PrefetchLink } from "./PrefetchLink";
+import { OrdersNavLink } from "./OrdersNavLink";
 import { MobileMenuToggle } from "./MobileMenuToggle";
+import { CartBadge } from "./CartBadge";
 
 export async function Navbar() {
   const user = await getSessionUser();
@@ -14,11 +16,7 @@ export async function Navbar() {
       <PrefetchLink href="/menu" className="hover:text-canteen">
         Menu
       </PrefetchLink>
-      {user && (
-        <Link href="/orders" className="text-muted hover:text-canteen">
-          My Orders
-        </Link>
-      )}
+      {user && <OrdersNavLink />}
       {user && (
         <Link href="/account" className="text-muted hover:text-canteen">
           Account
@@ -29,6 +27,7 @@ export async function Navbar() {
           Admin
         </Link>
       )}
+      {user && <CartBadge />}
       {user ? (
         <LogoutButton />
       ) : (
@@ -49,7 +48,7 @@ export async function Navbar() {
 
   return (
     <header className="relative bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-8 sm:py-7">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-8 sm:py-7 lg:px-12 xl:px-16">
         <Link href="/" className="font-display text-2xl tracking-tight text-ink">
           Swift Canteen
         </Link>

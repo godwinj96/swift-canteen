@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/Badge";
@@ -11,16 +11,18 @@ import { useOrderDetail, useRetryPayment, type OrderDetail } from "@/lib/queries
 
 const STATUS_STEPS = ["PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "COMPLETED"] as const;
 
-function PaymentSuccessBanner() {
+function PaymentSuccessBanner({ onConfirmed }: { onConfirmed: () => void }) {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   useEffect(() => {
     if (searchParams.get("payment") === "success") {
       toast.success("Payment received — your order is being confirmed.");
+      onConfirmed();
       router.replace(window.location.pathname);
     }
-  }, [searchParams, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   return null;
 }
@@ -28,6 +30,7 @@ function PaymentSuccessBanner() {
 export function OrderDetailClient({ initialOrder }: { initialOrder: OrderDetail }) {
   const { data: order = initialOrder } = useOrderDetail(initialOrder.id, initialOrder);
   const retryPayment = useRetryPayment(order.id);
+  const [justConfirmed, setJustConfirmed] = useState(false);
 
   const currentStepIndex = STATUS_STEPS.indexOf(order.status as (typeof STATUS_STEPS)[number]);
   const canRetryPayment = order.payment && (order.payment.status === "FAILED" || order.payment.status === "INITIATED");
@@ -44,8 +47,18 @@ export function OrderDetailClient({ initialOrder }: { initialOrder: OrderDetail 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-8">
       <Suspense fallback={null}>
-        <PaymentSuccessBanner />
+        <PaymentSuccessBanner onConfirmed={() => setJustConfirmed(true)} />
       </Suspense>
+
+      {justConfirmed && (
+        <Card className="mb-6 border border-emerald-200 bg-emerald-50">
+          <p className="text-sm font-semibold text-emerald-800">Order confirmed 🎉</p>
+          <p className="mt-1 text-sm text-emerald-700">
+            Your payment went through and the canteen has your order. We&apos;ll update the status below as it&apos;s
+            prepared.
+          </p>
+        </Card>
+      )}
 
       <div className="mb-8 flex items-center justify-between">
         <h1 className="font-display text-3xl tracking-tight text-ink">Order #{order.id.slice(-8)}</h1>

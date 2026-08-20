@@ -123,6 +123,34 @@ export function useCreateMenuItem() {
   });
 }
 
+export interface UpdateMenuItemInput {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  categoryId: string;
+  imageUrl?: string;
+}
+
+export function useUpdateMenuItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: UpdateMenuItemInput) => {
+      const res = await fetch(`/api/menu-items/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not update item");
+      return data.menuItem;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminMenuItemsQueryKey });
+    },
+  });
+}
+
 export function useToggleMenuItemAvailability() {
   const queryClient = useQueryClient();
   return useMutation({

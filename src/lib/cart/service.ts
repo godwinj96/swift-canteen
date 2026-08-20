@@ -21,24 +21,20 @@ export async function getOrCreateCart(userId: string): Promise<CartWithItems> {
 }
 
 export async function addItemToCart(userId: string, itemId: string, quantity: number) {
-  const menuItem = await prisma.menuItem.findUnique({ where: { id: itemId } });
+  const [menuItem, cart] = await Promise.all([
+    prisma.menuItem.findUnique({ where: { id: itemId } }),
+    getOrCreateCart(userId),
+  ]);
   if (!menuItem || !menuItem.isAvailable) {
     throw new ApiError(404, "Menu item not found or unavailable");
   }
 
-  const cart = await getOrCreateCart(userId);
   const existingItem = cart.items.find((i) => i.itemId === itemId);
-
-  if (existingItem) {
-    await prisma.cartItem.update({
-      where: { id: existingItem.id },
-      data: { quantity: existingItem.quantity + quantity },
-    });
-  } else {
-    await prisma.cartItem.create({
-      data: { cartId: cart.id, itemId, quantity },
-    });
-  }
+  await prisma.cartItem.upsert({
+    where: { cartId_itemId: { cartId: cart.id, itemId } },
+    update: { quantity: (existingItem?.quantity ?? 0) + quantity },
+    create: { cartId: cart.id, itemId, quantity },
+  });
 
   return getOrCreateCart(userId);
 }
@@ -69,5 +65,37 @@ export async function updateCartItemQuantity(userId: string, cartItemId: string,
 export async function removeCartItem(userId: string, cartItemId: string) {
   const cartItem = await getOwnedCartItem(userId, cartItemId);
   await prisma.cartItem.delete({ where: { id: cartItem.id } });
+  return getOrCreateCart(userId);
+}
+
+/**
+ * Replaces the user's server-side cart with the given lines in one transaction.
+ * Used to lazily sync a client-owned, localStorage-first cart to the server.
+ * Unavailable/missing items are silently dropped rather than rejected outright,
+ * since the client is expected to re-validate against fresh menu data anyway.
+ */
+export async function replaceCart(userId: string, lines: { itemId: string; quantity: number }[]) {
+  const cart = await getOrCreateCart(userId);
+
+  const menuItems = await prisma.menuItem.findMany({
+    where: { id: { in: lines.map((l) => l.itemId) } },
+  });
+  const availableIds = new Set(menuItems.filter((m) => m.isAvailable).map((m) => m.id));
+  const validLines = lines.filter((l) => l.quantity > 0 && availableIds.has(l.itemId));
+  const validItemIds = validLines.map((l) => l.itemId);
+
+  await prisma.$transaction([
+    prisma.cartItem.deleteMany({
+      where: { cartId: cart.id, itemId: { notIn: validItemIds.length > 0 ? validItemIds : ["__none__"] } },
+    }),
+    ...validLines.map((line) =>
+      prisma.cartItem.upsert({
+        where: { cartId_itemId: { cartId: cart.id, itemId: line.itemId } },
+        update: { quantity: line.quantity },
+        create: { cartId: cart.id, itemId: line.itemId, quantity: line.quantity },
+      })
+    ),
+  ]);
+
   return getOrCreateCart(userId);
 }

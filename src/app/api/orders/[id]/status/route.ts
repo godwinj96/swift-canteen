@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { toErrorResponse } from "@/lib/errors";
 import { requireRole } from "@/lib/auth/guards";
 import { updateOrderStatus } from "@/lib/orders/service";
@@ -10,6 +11,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params;
     const body = orderStatusUpdateSchema.parse(await request.json());
     const order = await updateOrderStatus(id, body.status);
+    revalidateTag("orders");
+    revalidateTag("admin-orders");
+    revalidateTag("admin-dashboard");
+    revalidateTag("admin-reports");
     return NextResponse.json({ order });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

@@ -49,7 +49,7 @@ const STEPS = [
 export default function LandingPage() {
   return (
     <div>
-      <section className="mx-auto flex max-w-6xl flex-col items-end justify-between gap-10 px-4 sm:px-8 pt-6 lg:flex-row">
+      <section className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-10 px-4 sm:px-8 lg:px-12 xl:px-16 pt-6 lg:flex-row">
         <div className="flex max-w-xl flex-col gap-6">
           <span className="text-[13px] font-semibold tracking-[0.08em] text-canteen uppercase">
             Campus canteen, online
@@ -105,7 +105,7 @@ export default function LandingPage() {
               ))}
             </ul>
           </div>
-          <div className="absolute -bottom-4 right-2 flex w-[140px] flex-col gap-1.5 rounded-2xl bg-ink p-3.5 shadow-xl sm:-right-8 sm:-bottom-6 sm:w-[188px] sm:gap-2.5 sm:p-5">
+          <div className="absolute top-[65%] right-2 flex w-[140px] -translate-y-1/2 flex-col gap-1.5 rounded-2xl bg-ink p-3.5 shadow-xl sm:right-[-1.25rem] sm:w-[188px] sm:gap-2.5 sm:p-5">
             <div className="flex flex-row gap-0.5">
               {[0, 1, 2, 3].map((i) => (
                 <StarIcon key={i} fill="var(--color-canteen)" />
@@ -118,9 +118,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <div className="mx-auto mt-24 h-px max-w-6xl bg-line" />
+      <div className="mx-auto mt-24 h-px max-w-7xl bg-line" />
 
-      <section className="mx-auto max-w-6xl px-4 sm:px-8 py-16">
+      <section className="mx-auto max-w-7xl px-4 sm:px-8 lg:px-12 xl:px-16 py-16">
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-2">
             <span className="text-[13px] font-semibold tracking-[0.08em] text-canteen uppercase">
@@ -135,7 +135,10 @@ export default function LandingPage() {
 
         <div className="mt-9 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {POPULAR_ITEMS.map((item) => (
-            <div key={item.name} className="flex flex-col gap-3.5">
+            <div
+              key={item.name}
+              className="shadow-elevation-sm hover:shadow-elevation-md flex flex-col gap-3.5 rounded-2xl bg-white p-3 transition-shadow"
+            >
               <Image
                 src={item.image}
                 alt={item.name}
@@ -153,8 +156,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="flex flex-row flex-wrap gap-16 bg-ink px-4 sm:px-8 py-24">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-16 sm:grid-cols-3">
+      <section className="flex flex-row flex-wrap gap-16 bg-ink px-4 sm:px-8 lg:px-12 xl:px-16 py-24">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-16 sm:grid-cols-3">
           {STEPS.map((step) => (
             <div key={step.number} className="flex flex-col gap-3">
               <span className="font-display text-4xl leading-none text-canteen">{step.number}</span>

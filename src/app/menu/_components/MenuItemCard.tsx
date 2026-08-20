@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
 import { formatNaira } from "@/lib/currency";
 
@@ -11,23 +10,12 @@ interface MenuItemCardProps {
   price: number;
   imageUrl: string | null;
   isAvailable: boolean;
-  onAdd: (itemId: string) => Promise<void>;
+  onAdd: (itemId: string) => void;
 }
 
 export function MenuItemCard({ id, name, description, price, imageUrl, isAvailable, onAdd }: MenuItemCardProps) {
-  const [adding, setAdding] = useState(false);
-
-  async function handleAdd() {
-    setAdding(true);
-    try {
-      await onAdd(id);
-    } finally {
-      setAdding(false);
-    }
-  }
-
   return (
-    <div className="flex flex-col gap-3.5 rounded-2xl bg-canteen-light p-4">
+    <div className="shadow-elevation-sm hover:shadow-elevation-md flex flex-col gap-3.5 rounded-2xl bg-canteen-light p-4 transition-shadow">
       {imageUrl ? (
         <Image
           src={imageUrl}
@@ -49,11 +37,11 @@ export function MenuItemCard({ id, name, description, price, imageUrl, isAvailab
         <span className="shrink-0 font-bold text-canteen-dark">{formatNaira(price)}</span>
       </div>
       <button
-        onClick={handleAdd}
-        disabled={!isAvailable || adding}
-        className="w-full rounded-full bg-ink py-3 text-sm font-semibold text-white transition-colors hover:bg-canteen-dark disabled:cursor-not-allowed disabled:opacity-50"
+        onClick={() => onAdd(id)}
+        disabled={!isAvailable}
+        className="w-full rounded-full bg-ink py-3 text-sm font-semibold text-white transition-colors hover:bg-canteen-dark active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {!isAvailable ? "Unavailable" : adding ? "Adding..." : "Add to cart"}
+        {isAvailable ? "Add to cart" : "Unavailable"}
       </button>
     </div>
   );

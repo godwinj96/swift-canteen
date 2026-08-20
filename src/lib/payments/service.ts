@@ -91,6 +91,9 @@ const BACHS_EVENT_TO_PAYMENT_STATUS: Record<BachsCollectionEvent["type"], Paymen
 
 const AMOUNT_TOLERANCE = 0.01;
 
+// Cache invalidation happens in the webhook route handler after this resolves,
+// not here — revalidateTag needs a live request context and throws when this
+// function is called directly (e.g. from the integration test suite).
 export async function reconcilePaymentStatus(event: BachsCollectionEvent) {
   return prisma.$transaction(async (tx) => {
     const payment = await tx.payment.findUnique({

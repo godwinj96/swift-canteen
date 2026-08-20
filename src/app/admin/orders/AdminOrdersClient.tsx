@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/Badge";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/Table";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { OrderStatus } from "@prisma/client";
 import { formatNaira } from "@/lib/currency";
 import { useAdminOrders, useAdvanceOrderStatus, type AdminOrderRow } from "@/lib/queries/adminOrders";
@@ -15,6 +17,7 @@ const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
 export function AdminOrdersClient({ orders: initialOrders }: { orders: AdminOrderRow[] }) {
   const { data: orders = initialOrders } = useAdminOrders(initialOrders);
   const advanceStatus = useAdvanceOrderStatus();
+  const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
 
   return (
     <div>
@@ -58,7 +61,7 @@ export function AdminOrdersClient({ orders: initialOrders }: { orders: AdminOrde
                   )}
                   {order.status !== "CANCELLED" && order.status !== "COMPLETED" && (
                     <button
-                      onClick={() => advanceStatus.mutate({ orderId: order.id, status: "CANCELLED" })}
+                      onClick={() => setPendingCancelId(order.id)}
                       className="text-xs font-medium text-red-600 hover:underline"
                     >
                       Cancel
@@ -70,6 +73,20 @@ export function AdminOrdersClient({ orders: initialOrders }: { orders: AdminOrde
           })}
         </TableBody>
       </Table>
+
+      <ConfirmDialog
+        open={pendingCancelId !== null}
+        title="Cancel this order?"
+        description="The customer will see this order as cancelled. This can't be undone."
+        confirmLabel="Cancel order"
+        pending={advanceStatus.isPending}
+        onConfirm={() => {
+          if (!pendingCancelId) return;
+          advanceStatus.mutate({ orderId: pendingCancelId, status: "CANCELLED" });
+          setPendingCancelId(null);
+        }}
+        onCancel={() => setPendingCancelId(null)}
+      />
     </div>
   );
 }

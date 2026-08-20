@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { toErrorResponse, ApiError } from "@/lib/errors";
 import { requireRole } from "@/lib/auth/guards";
@@ -17,6 +18,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       data: { role: body.role },
       select: { id: true, fullName: true, email: true, role: true, phone: true, createdAt: true },
     });
+    revalidateTag("admin-users");
     return NextResponse.json({ user });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

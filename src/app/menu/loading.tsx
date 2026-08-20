@@ -1,6 +1,6 @@
 export default function MenuLoading() {
   return (
-    <div className="mx-auto max-w-6xl animate-pulse px-4 sm:px-8 py-8">
+    <div className="mx-auto max-w-7xl animate-pulse px-4 sm:px-8 lg:px-12 xl:px-16 py-8">
       <div className="mb-8 flex items-end justify-between gap-6">
         <div className="flex flex-col gap-3">
           <div className="h-3 w-32 rounded bg-line" />

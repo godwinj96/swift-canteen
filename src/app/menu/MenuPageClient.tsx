@@ -1,11 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { CategoryTabs } from "./_components/CategoryTabs";
 import { MenuGrid } from "./_components/MenuGrid";
 import { CartDrawer } from "./_components/CartDrawer";
-import { useAddToCart, useCart, useRemoveCartItem, useUpdateCartItem, type CartItemData } from "@/lib/queries/cart";
+import { SearchInput } from "./_components/SearchInput";
+import { useLocalCart } from "@/lib/cart/useLocalCart";
+import { useDebounce } from "@/lib/hooks/useDebounce";
+
+const PAGE_SIZE = 12;
+const SEARCH_DEBOUNCE_MS = 275;
 
 interface MenuItemData {
   id: string;
@@ -25,58 +31,82 @@ interface Category {
 interface MenuPageClientProps {
   categories: Category[];
   items: MenuItemData[];
-  initialCartItems: CartItemData[];
-  isLoggedIn: boolean;
+  userId: string | null;
 }
 
-export function MenuPageClient({ categories, items, initialCartItems, isLoggedIn }: MenuPageClientProps) {
+export function MenuPageClient({ categories, items, userId }: MenuPageClientProps) {
+  const isLoggedIn = userId !== null;
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const debouncedSearch = useDebounce(searchInput, SEARCH_DEBOUNCE_MS);
 
-  const { data: cartItems = initialCartItems } = useCart(isLoggedIn ? initialCartItems : []);
-  const addToCart = useAddToCart();
-  const updateCartItem = useUpdateCartItem();
-  const removeCartItem = useRemoveCartItem();
+  const cart = useLocalCart(userId);
 
-  const filteredItems = useMemo(
-    () => (activeCategory ? items.filter((i) => i.categoryId === activeCategory) : items),
-    [items, activeCategory]
+  const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+
+  const cartLines = useMemo(
+    () =>
+      cart.lines
+        .map((line) => {
+          const item = itemsById.get(line.itemId);
+          return item ? { itemId: line.itemId, quantity: line.quantity, item } : null;
+        })
+        .filter((line): line is { itemId: string; quantity: number; item: MenuItemData } => line !== null),
+    [cart.lines, itemsById]
   );
 
-  const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
+  const filteredItems = useMemo(() => {
+    const query = debouncedSearch.trim().toLowerCase();
+    return items.filter((item) => {
+      if (activeCategory && item.categoryId !== activeCategory) return false;
+      if (!query) return true;
+      return item.name.toLowerCase().includes(query) || item.description?.toLowerCase().includes(query);
+    });
+  }, [items, activeCategory, debouncedSearch]);
 
-  async function handleAdd(itemId: string) {
+  const visibleItems = filteredItems.slice(0, visibleCount);
+
+  // Reset pagination whenever the active filter set changes (adjusting state
+  // during render rather than in an effect — see react.dev/learn/you-might-not-need-an-effect)
+  const filterKey = `${activeCategory ?? "all"}::${debouncedSearch}`;
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setVisibleCount(PAGE_SIZE);
+  }
+
+  function handleAdd(itemId: string) {
     if (!isLoggedIn) {
-      router.push("/login");
+      router.push(`/login?redirect=${encodeURIComponent("/menu")}`);
       return;
     }
-    try {
-      await addToCart.mutateAsync({ itemId, quantity: 1 });
-      setCartOpen(true);
-    } catch {
-      // surfaced via the global mutation error toast
+    const item = itemsById.get(itemId);
+    if (!item?.isAvailable) {
+      toast.error("That item isn't available right now.");
+      return;
     }
+    cart.addItem(itemId, 1);
+    setCartOpen(true);
   }
 
-  async function handleUpdateQuantity(cartItemId: string, quantity: number) {
-    try {
-      await updateCartItem.mutateAsync({ cartItemId, quantity });
-    } catch {
-      // surfaced via the global mutation error toast
-    }
+  function handleUpdateQuantity(itemId: string, quantity: number) {
+    cart.updateQuantity(itemId, quantity);
   }
 
-  async function handleRemove(cartItemId: string) {
-    try {
-      await removeCartItem.mutateAsync(cartItemId);
-    } catch {
-      // surfaced via the global mutation error toast
-    }
+  function handleRemove(itemId: string) {
+    cart.removeItem(itemId);
+  }
+
+  async function handleCheckout() {
+    await cart.forceSyncNow();
+    router.push("/checkout");
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-8 py-8">
+    <div className="mx-auto max-w-7xl px-4 sm:px-8 lg:px-12 xl:px-16 py-8">
       <div className="mb-8 flex items-end justify-between gap-6">
         <div className="flex flex-col gap-2">
           <span className="text-[13px] font-semibold tracking-[0.08em] text-canteen uppercase">
@@ -90,20 +120,30 @@ export function MenuPageClient({ categories, items, initialCartItems, isLoggedIn
         >
           Cart
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-canteen text-xs font-bold">
-            {cartCount}
+            {cart.count}
           </span>
         </button>
+      </div>
+      <div className="mb-6">
+        <SearchInput value={searchInput} onChange={setSearchInput} />
       </div>
       <div className="mb-8">
         <CategoryTabs categories={categories} activeId={activeCategory} onSelect={setActiveCategory} />
       </div>
-      <MenuGrid items={filteredItems} onAdd={handleAdd} />
+      <MenuGrid
+        items={visibleItems}
+        onAdd={handleAdd}
+        emptyMessage={debouncedSearch.trim() ? `No items match "${debouncedSearch.trim()}".` : undefined}
+        hasMore={visibleCount < filteredItems.length}
+        onLoadMore={() => setVisibleCount((count) => count + PAGE_SIZE)}
+      />
       <CartDrawer
         open={cartOpen}
         onClose={() => setCartOpen(false)}
-        items={cartItems}
+        items={cartLines}
         onUpdateQuantity={handleUpdateQuantity}
         onRemove={handleRemove}
+        onCheckout={handleCheckout}
       />
     </div>
   );

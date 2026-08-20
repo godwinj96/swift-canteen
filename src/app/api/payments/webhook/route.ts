@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { toErrorResponse } from "@/lib/errors";
 import { verifyWebhookSignature, parseWebhookPayload } from "@/lib/payments/bachsClient";
 import { reconcilePaymentStatus } from "@/lib/payments/service";
@@ -16,6 +17,10 @@ export async function POST(request: NextRequest) {
     const event = parseWebhookPayload(rawBody);
     if (event) {
       await reconcilePaymentStatus(event);
+      revalidateTag("orders");
+      revalidateTag("admin-orders");
+      revalidateTag("admin-dashboard");
+      revalidateTag("admin-reports");
     }
 
     return NextResponse.json({ received: true });

@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { formatNaira } from "@/lib/currency";
 
 interface CartItemData {
-  id: string;
+  itemId: string;
   quantity: number;
   item: { id: string; name: string; price: number };
 }
@@ -13,13 +13,23 @@ interface CartDrawerProps {
   open: boolean;
   onClose: () => void;
   items: CartItemData[];
-  onUpdateQuantity: (cartItemId: string, quantity: number) => Promise<void>;
-  onRemove: (cartItemId: string) => Promise<void>;
+  onUpdateQuantity: (itemId: string, quantity: number) => void;
+  onRemove: (itemId: string) => void;
+  onCheckout: () => Promise<void>;
 }
 
-export function CartDrawer({ open, onClose, items, onUpdateQuantity, onRemove }: CartDrawerProps) {
-  const router = useRouter();
+export function CartDrawer({ open, onClose, items, onUpdateQuantity, onRemove, onCheckout }: CartDrawerProps) {
+  const [checkingOut, setCheckingOut] = useState(false);
   const total = items.reduce((sum, i) => sum + i.item.price * i.quantity, 0);
+
+  async function handleCheckoutClick() {
+    setCheckingOut(true);
+    try {
+      await onCheckout();
+    } finally {
+      setCheckingOut(false);
+    }
+  }
 
   return (
     <>
@@ -41,27 +51,27 @@ export function CartDrawer({ open, onClose, items, onUpdateQuantity, onRemove }:
           ) : (
             <ul className="flex flex-col gap-5">
               {items.map((cartItem) => (
-                <li key={cartItem.id} className="flex items-center justify-between gap-2">
+                <li key={cartItem.itemId} className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-medium text-ink">{cartItem.item.name}</p>
                     <p className="text-xs text-muted">{formatNaira(cartItem.item.price)} each</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => onUpdateQuantity(cartItem.id, cartItem.quantity - 1)}
+                      onClick={() => onUpdateQuantity(cartItem.itemId, cartItem.quantity - 1)}
                       className="h-6 w-6 rounded-full border border-line text-ink hover:bg-canteen-light"
                     >
                       -
                     </button>
                     <span className="w-4 text-center text-sm">{cartItem.quantity}</span>
                     <button
-                      onClick={() => onUpdateQuantity(cartItem.id, cartItem.quantity + 1)}
+                      onClick={() => onUpdateQuantity(cartItem.itemId, cartItem.quantity + 1)}
                       className="h-6 w-6 rounded-full border border-line text-ink hover:bg-canteen-light"
                     >
                       +
                     </button>
                     <button
-                      onClick={() => onRemove(cartItem.id)}
+                      onClick={() => onRemove(cartItem.itemId)}
                       className="ml-1 text-xs text-red-500 hover:underline"
                     >
                       Remove
@@ -78,11 +88,11 @@ export function CartDrawer({ open, onClose, items, onUpdateQuantity, onRemove }:
             <span>{formatNaira(total)}</span>
           </div>
           <button
-            disabled={items.length === 0}
-            onClick={() => router.push("/checkout")}
+            disabled={items.length === 0 || checkingOut}
+            onClick={handleCheckoutClick}
             className="w-full rounded-full bg-canteen py-3.5 font-semibold text-white hover:bg-canteen-dark disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Checkout
+            {checkingOut ? "Preparing checkout..." : "Checkout"}
           </button>
         </div>
       </div>

@@ -66,6 +66,8 @@ model CartItem {
   itemId   String
   item     MenuItem @relation(fields: [itemId], references: [id])
   quantity Int
+
+  @@unique([cartId, itemId])
 }
 
 model Order {

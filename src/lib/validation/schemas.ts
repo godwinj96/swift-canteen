@@ -43,6 +43,15 @@ export const cartUpdateSchema = z.object({
   quantity: z.number().int().min(0),
 });
 
+export const cartReplaceSchema = z.object({
+  items: z.array(
+    z.object({
+      itemId: z.string().min(1),
+      quantity: z.number().int().min(0),
+    })
+  ),
+});
+
 export const placeOrderSchema = z.object({
   pickupTime: z.string().datetime().optional(),
 });

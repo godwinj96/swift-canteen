@@ -1,25 +1,14 @@
-import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth/session";
+import { getAdminUsersData } from "@/lib/cache/adminData";
 import { AdminUsersClient } from "./AdminUsersClient";
 
 export default async function AdminUsersPage() {
-  const [users, currentUser] = await Promise.all([
-    prisma.user.findMany({
-      select: { id: true, fullName: true, email: true, role: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    getSessionUser(),
-  ]);
+  // getSessionUser reads the auth cookie directly — never cached (see adminData.ts).
+  const [users, currentUser] = await Promise.all([getAdminUsersData(), getSessionUser()]);
 
   return (
     <AdminUsersClient
-      users={users.map((u) => ({
-        id: u.id,
-        fullName: u.fullName,
-        email: u.email,
-        role: u.role,
-        createdAt: u.createdAt.toISOString(),
-      }))}
+      users={users}
       currentUserId={currentUser?.sub ?? ""}
       currentUserRole={currentUser?.role ?? "CUSTOMER"}
     />

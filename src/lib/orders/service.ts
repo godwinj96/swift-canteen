@@ -1,8 +1,16 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/errors";
 import { hasMinimumRole } from "@/lib/auth/roles";
 import { assertOrderTransition } from "./stateMachine";
 import type { OrderStatus, Role } from "@prisma/client";
+
+// Cache invalidation (revalidateTag) deliberately happens in the calling route
+// handlers, not here — revalidateTag requires a live Next.js request context and
+// throws ("static generation store missing") when these functions are called
+// directly, e.g. from the integration test suite. See the "orders"/"admin-orders"/
+// "admin-dashboard"/"admin-reports" tags invalidated in src/app/api/orders/route.ts
+// and src/app/api/orders/[id]/status/route.ts.
 
 export async function placeOrder(userId: string, pickupTime?: string) {
   return prisma.$transaction(async (tx) => {
@@ -52,25 +60,40 @@ export async function placeOrder(userId: string, pickupTime?: string) {
   });
 }
 
-export async function listOrdersForUser(userId: string, role: Role) {
-  if (hasMinimumRole(role, "STAFF")) {
+const getCachedOrdersForUser = unstable_cache(
+  async (userId: string, role: Role) => {
+    if (hasMinimumRole(role, "STAFF")) {
+      return prisma.order.findMany({
+        include: { items: { include: { item: true } }, payment: true, user: true },
+        orderBy: { createdAt: "desc" },
+      });
+    }
     return prisma.order.findMany({
-      include: { items: { include: { item: true } }, payment: true, user: true },
+      where: { userId },
+      include: { items: { include: { item: true } }, payment: true },
       orderBy: { createdAt: "desc" },
     });
-  }
-  return prisma.order.findMany({
-    where: { userId },
-    include: { items: { include: { item: true } }, payment: true },
-    orderBy: { createdAt: "desc" },
-  });
+  },
+  ["orders-for-user"],
+  { revalidate: 10, tags: ["orders"] }
+);
+
+export async function listOrdersForUser(userId: string, role: Role) {
+  return getCachedOrdersForUser(userId, role);
 }
 
+const getCachedOrderById = unstable_cache(
+  async (orderId: string) =>
+    prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: { include: { item: true } }, payment: true, user: true },
+    }),
+  ["order-by-id"],
+  { revalidate: 10, tags: ["orders"] }
+);
+
 export async function getOrderById(orderId: string, userId: string, role: Role) {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { items: { include: { item: true } }, payment: true, user: true },
-  });
+  const order = await getCachedOrderById(orderId);
   if (!order) throw new ApiError(404, "Order not found");
   if (!hasMinimumRole(role, "STAFF") && order.userId !== userId) {
     throw new ApiError(403, "You do not have access to this order");
@@ -80,10 +103,10 @@ export async function getOrderById(orderId: string, userId: string, role: Role) 
 
 export async function updateOrderStatus(orderId: string, newStatus: OrderStatus) {
   return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new ApiError(404, "Order not found");
+    const existing = await tx.order.findUnique({ where: { id: orderId } });
+    if (!existing) throw new ApiError(404, "Order not found");
 
-    assertOrderTransition(order.status, newStatus);
+    assertOrderTransition(existing.status, newStatus);
 
     return tx.order.update({
       where: { id: orderId },
