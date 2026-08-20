@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { hasMinimumRole } from "@/lib/auth/roles";
-import { prefetchCart } from "@/lib/queries/cart";
 import { prefetchOrders } from "@/lib/queries/orders";
 import { prefetchMenu } from "@/lib/queries/menu";
 import { prefetchAdminOrders } from "@/lib/queries/adminOrders";
@@ -17,7 +16,10 @@ export function RolePrefetcher({ role }: { role: Role | null }) {
   useEffect(() => {
     if (!role) return;
 
-    prefetchCart(queryClient);
+    // Cart is local-first (localStorage, see lib/cart/useLocalCart.ts) — no
+    // TanStack Query cache to warm for it. Orders (below) still round-trip
+    // the server, so eager-prefetching that on every authenticated load is
+    // worth it.
     prefetchOrders(queryClient);
 
     if (hasMinimumRole(role, "STAFF")) {

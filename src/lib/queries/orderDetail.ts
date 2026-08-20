@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { OrderStatus, PaymentStatus } from "@prisma/client";
 
 export interface OrderDetail {
@@ -41,6 +41,13 @@ async function fetchOrderDetail(orderId: string): Promise<OrderDetail> {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Could not load order");
   return normalizeOrderDetail(data.order);
+}
+
+export function prefetchOrderDetail(queryClient: QueryClient, orderId: string) {
+  return queryClient.prefetchQuery({
+    queryKey: orderDetailQueryKey(orderId),
+    queryFn: () => fetchOrderDetail(orderId),
+  });
 }
 
 const PAYMENT_PENDING_STATUSES: PaymentStatus[] = ["INITIATED", "PENDING"];

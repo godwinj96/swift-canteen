@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { PrefetchLink } from "@/components/layout/PrefetchLink";
 import { formatNaira } from "@/lib/currency";
 import { useOrders, type OrderSummary } from "@/lib/queries/orders";
+import { prefetchOrderDetail } from "@/lib/queries/orderDetail";
 
 export function OrdersPageClient({ initialOrders }: { initialOrders: OrderSummary[] }) {
   const { data: orders = initialOrders } = useOrders(initialOrders);
@@ -17,7 +18,11 @@ export function OrdersPageClient({ initialOrders }: { initialOrders: OrderSummar
       ) : (
         <div className="flex flex-col gap-4">
           {orders.map((order) => (
-            <Link key={order.id} href={`/orders/${order.id}`}>
+            <PrefetchLink
+              key={order.id}
+              href={`/orders/${order.id}`}
+              prefetchData={(qc) => prefetchOrderDetail(qc, order.id)}
+            >
               <Card className="flex items-center justify-between hover:bg-white hover:shadow-md hover:shadow-canteen/10 hover:outline hover:outline-canteen">
                 <div>
                   <p className="font-medium text-ink">Order #{order.id.slice(-8)}</p>
@@ -30,7 +35,7 @@ export function OrdersPageClient({ initialOrders }: { initialOrders: OrderSummar
                   <OrderStatusBadge status={order.status} />
                 </div>
               </Card>
-            </Link>
+            </PrefetchLink>
           ))}
         </div>
       )}
