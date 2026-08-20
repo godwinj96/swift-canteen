@@ -2,6 +2,11 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { toast } from "sonner";
 import type { OrderStatus, PaymentStatus } from "@prisma/client";
 
+export interface AdminOrderItemSummary {
+  name: string;
+  quantity: number;
+}
+
 export interface AdminOrderRow {
   id: string;
   status: OrderStatus;
@@ -9,6 +14,7 @@ export interface AdminOrderRow {
   createdAt: string;
   customerName: string;
   itemCount: number;
+  items: AdminOrderItemSummary[];
   paymentStatus: PaymentStatus | null;
 }
 
@@ -17,7 +23,7 @@ interface RawAdminOrder {
   status: OrderStatus;
   totalAmount: string | number;
   createdAt: string;
-  items: unknown[];
+  items: { quantity: number; item: { name: string } }[];
   payment: { status: PaymentStatus } | null;
   user: { fullName: string };
 }
@@ -30,9 +36,12 @@ function normalizeAdminOrder(order: RawAdminOrder): AdminOrderRow {
     createdAt: order.createdAt,
     customerName: order.user.fullName,
     itemCount: order.items.length,
+    items: order.items.map((oi) => ({ name: oi.item.name, quantity: oi.quantity })),
     paymentStatus: order.payment?.status ?? null,
   };
 }
+
+const LIVE_STATUSES: OrderStatus[] = ["PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP"];
 
 export const adminOrdersQueryKey = ["admin", "orders"] as const;
 
@@ -53,6 +62,11 @@ export function useAdminOrders(initialData?: AdminOrderRow[]) {
     queryFn: fetchAdminOrders,
     initialData,
     staleTime: 15 * 1000,
+    refetchInterval: (query) => {
+      const orders = query.state.data;
+      const hasLiveOrder = orders?.some((order) => LIVE_STATUSES.includes(order.status));
+      return hasLiveOrder ? 8000 : false;
+    },
   });
 }
 

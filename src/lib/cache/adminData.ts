@@ -70,6 +70,7 @@ export const getAdminOrdersData = unstable_cache(
       createdAt: o.createdAt.toISOString(),
       customerName: o.user.fullName,
       itemCount: o.items.length,
+      items: o.items.map((oi) => ({ name: oi.item.name, quantity: oi.quantity })),
       paymentStatus: o.payment?.status ?? null,
     }));
   },
