@@ -12,7 +12,7 @@ export async function Navbar() {
   const user = await getSessionUser();
   const isAdmin = Boolean(user) && hasMinimumRole(user!.role, "STAFF");
 
-  const links = (
+  const renderLinks = (cartVariant: "icon" | "row") => (
     <>
       {user && (
         <Link href="/dashboard" className="text-muted hover:text-canteen">
@@ -33,7 +33,7 @@ export async function Navbar() {
           Admin
         </Link>
       )}
-      {user && <CartBadge userId={user.sub} />}
+      {user && <CartBadge userId={user.sub} variant={cartVariant} />}
       {user ? (
         <LogoutButton />
       ) : (
@@ -59,8 +59,10 @@ export async function Navbar() {
           <Logomark />
           Swift Canteen
         </Link>
-        <nav className="hidden items-center gap-10 text-[15px] font-medium text-ink md:flex">{links}</nav>
-        <MobileMenuToggle>{links}</MobileMenuToggle>
+        <nav className="hidden items-center gap-10 text-[15px] font-medium text-ink md:flex">
+          {renderLinks("icon")}
+        </nav>
+        <MobileMenuToggle>{renderLinks("row")}</MobileMenuToggle>
       </div>
     </header>
   );
